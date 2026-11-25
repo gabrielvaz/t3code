@@ -1,0 +1,220 @@
+import { useAtomValue } from "@effect/atom-react";
+import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { settlePromise } from "@t3tools/client-runtime/state/runtime";
+import type { ContextMenuSource, ScopedThreadRef } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
+import { useGT } from "gt-react";
+import { PinIcon, PlusIcon } from "lucide-react";
+import { memo, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
+
+import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
+import { readLocalApi } from "../../localApi";
+import { cn } from "~/lib/utils";
+import { openNewBotDialog, type EnvironmentBot } from "../../state/bots";
+import { useThreadShell } from "../../state/entities";
+import { serverEnvironment } from "../../state/server";
+import { useUiStateStore } from "../../uiStateStore";
+import { BotAvatar } from "../bots/BotAvatar";
+import { useBotActions } from "../bots/useBotActions";
+import {
+  hasUnseenCompletion,
+  resolveSidebarRowAccessibility,
+  resolveSidebarRowStatus,
+  resolveThreadLastVisitedAt,
+} from "../Sidebar.logic";
+import { Button } from "../ui/button";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
+import { TopStatusIcon, useSidebarTopStatus } from "./SidebarThreadRow";
+
+type RevealRef = (row: HTMLElement, rowKey: string) => (() => void) | undefined;
+
+const SidebarBotRow = memo(function SidebarBotRow(props: {
+  entry: EnvironmentBot;
+  isActive: boolean;
+  revealRef: RevealRef | undefined;
+  onNavigate: (threadRef: ScopedThreadRef) => void;
+  onContextMenu: (
+    entry: EnvironmentBot,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => void;
+}) {
+  const { entry, onNavigate, onContextMenu, revealRef } = props;
+  const { bot, environmentId } = entry;
+  const gt = useGT();
+  const threadRef = bot.threadId === null ? null : scopeThreadRef(environmentId, bot.threadId);
+  const rowKey = threadRef === null ? `bot:${bot.id}` : scopedThreadKey(threadRef);
+  const thread = useThreadShell(threadRef);
+  const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[rowKey]);
+  const lastVisitedAt = resolveThreadLastVisitedAt(thread?.lastVisitedAt, localLastVisitedAt);
+  const statusInput = thread === null ? null : { ...thread, lastVisitedAt };
+  const topStatus = useSidebarTopStatus({
+    status: statusInput === null ? "ready" : resolveSidebarRowStatus(statusInput),
+    goalActive: thread?.goal?.status === "active",
+    isWoke: false,
+    isUnread: statusInput !== null && hasUnseenCompletion(statusInput),
+  });
+  const accessibility = resolveSidebarRowAccessibility({
+    title: bot.name,
+    statusLabel: topStatus?.label ?? null,
+    projectDisplayName: bot.role || null,
+    isActive: props.isActive,
+  });
+  const activate = () => {
+    if (threadRef !== null) onNavigate(threadRef);
+  };
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    openContextMenuFromKeyboard(event);
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activate();
+    }
+  };
+  const handleContextMenu = (event: MouseEvent) => {
+    event.preventDefault();
+    onContextMenu(entry, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
+  };
+  return (
+    <li className="list-none">
+      <div
+        ref={(row) => (row === null ? undefined : revealRef?.(row, rowKey))}
+        role="button"
+        tabIndex={0}
+        data-sidebar-row={rowKey}
+        data-testid="sidebar-bot-row"
+        aria-label={accessibility.label}
+        aria-current={accessibility.current}
+        aria-disabled={threadRef === null || undefined}
+        className={cn(
+          "group/sidebar-row relative flex h-9 w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-md px-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          props.isActive
+            ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
+            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+        )}
+        onClick={activate}
+        onKeyDown={handleKeyDown}
+        onContextMenu={handleContextMenu}
+      >
+        <BotAvatar avatar={bot.avatar} name={bot.name} className="size-5" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{bot.name}</span>
+        {bot.pinned ? (
+          <PinIcon
+            aria-label={gt("Pinned")}
+            className="size-3 shrink-0 text-sidebar-muted-foreground"
+          />
+        ) : null}
+        {topStatus ? (
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1 text-xs font-medium",
+              topStatus.className,
+            )}
+          >
+            <TopStatusIcon icon={topStatus.icon} className="size-3.5" />
+            {topStatus.label}
+          </span>
+        ) : null}
+      </div>
+    </li>
+  );
+});
+
+/** The Bots section at the top of the thread list, shown once an environment has a Bot. */
+export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
+  bots: ReadonlyArray<EnvironmentBot>;
+  routeRowThreadKey: string | null;
+  revealRef: RevealRef;
+  onNavigate: (threadRef: ScopedThreadRef) => void;
+}) {
+  const gt = useGT();
+  const navigate = useNavigate();
+  const { update, confirmAndDelete } = useBotActions();
+  const canCreate = useAtomValue(
+    serverEnvironment.createBot.permissionAtom(props.bots[0]?.environmentId ?? null),
+  );
+  if (props.bots.length === 0) return null;
+
+  const showContextMenu = (
+    entry: EnvironmentBot,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => {
+    void (async () => {
+      const api = readLocalApi();
+      if (!api) return;
+      const clicked = await settlePromise(() =>
+        api.contextMenu.show(
+          [
+            { id: "open-page", label: gt("Open Bot page"), icon: "settings" },
+            entry.bot.pinned
+              ? { id: "unpin", label: gt("Unpin Bot"), icon: "pin-off" }
+              : { id: "pin", label: gt("Pin Bot"), icon: "pin" },
+            {
+              id: "delete",
+              label: gt("Delete Bot"),
+              icon: "trash",
+              destructive: true,
+              separatorBefore: true,
+            },
+          ] as const,
+          position,
+          source,
+        ),
+      );
+      if (clicked._tag === "Failure") return;
+      switch (clicked.value) {
+        case "open-page":
+          void navigate({ to: "/bots/$botId", params: { botId: entry.bot.id } });
+          break;
+        case "pin":
+        case "unpin":
+          void update(entry, { pinned: clicked.value === "pin" });
+          break;
+        case "delete":
+          void confirmAndDelete(entry);
+          break;
+      }
+    })();
+  };
+
+  return (
+    <>
+      <li className="flex h-8 list-none items-center gap-2 ps-2 pe-1 text-xs font-medium text-sidebar-muted-foreground">
+        <span className="min-w-0 truncate">{gt("Bots", { $context: "sidebar section" })}</span>
+        <span aria-hidden className="h-px min-w-2 flex-1 bg-sidebar-border/50" />
+        <SharedTooltipTrigger
+          render={
+            <Button
+              size="icon-micro"
+              variant="ghost-muted"
+              aria-label={gt("New Bot")}
+              disabled={!canCreate}
+              onClick={openNewBotDialog}
+            />
+          }
+          label={gt("New Bot")}
+        >
+          <PlusIcon />
+        </SharedTooltipTrigger>
+      </li>
+      {props.bots.map((entry) => {
+        const rowKey =
+          entry.bot.threadId === null
+            ? null
+            : scopedThreadKey(scopeThreadRef(entry.environmentId, entry.bot.threadId));
+        const isActive = rowKey !== null && rowKey === props.routeRowThreadKey;
+        return (
+          <SidebarBotRow
+            key={`${entry.environmentId}:${entry.bot.id}`}
+            entry={entry}
+            isActive={isActive}
+            revealRef={isActive ? props.revealRef : undefined}
+            onNavigate={props.onNavigate}
+            onContextMenu={showContextMenu}
+          />
+        );
+      })}
+      <li aria-hidden className="mx-2.5 my-1.5 h-px list-none bg-sidebar-border/60" />
+    </>
+  );
+});

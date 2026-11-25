@@ -41,13 +41,14 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+import { isBotAvatarColor, renderBotAvatarSvg } from "@t3tools/shared/botAvatar";
 
 import * as ServerConfig from "../config.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { botAvatarFileName, isBotAvatarColor, renderBotAvatarSvg } from "./BotAvatarSvg.ts";
+import { botAvatarFileName } from "./BotAvatarSvg.ts";
 import {
   type BotPaths,
   botPaths,

@@ -11,6 +11,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { useNavigate } from "@tanstack/react-router";
 import { T, useGT, Var } from "gt-react";
 import { ChevronDownIcon } from "lucide-react";
 import {
@@ -44,6 +45,8 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { useBotForThread } from "../../state/bots";
+import { BotAvatar } from "../bots/BotAvatar";
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 interface ChatHeaderProps {
@@ -92,6 +95,8 @@ export const ChatHeader = memo(function ChatHeader({
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
+  const botEntry = useBotForThread(activeThreadEnvironmentId, activeThreadId);
+  const navigate = useNavigate();
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
@@ -263,7 +268,40 @@ export const ChatHeader = memo(function ChatHeader({
         ariaLabel={gt("Thread breadcrumb")}
         className="flex-1 overflow-clip [overflow-clip-margin:2px]"
       >
-        {activeProject ? (
+        {botEntry ? (
+          <>
+            <WorkspaceBreadcrumbItem className="shrink">
+              <SharedTooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={gt("Open Bot page for {name}", { name: botEntry.bot.name })}
+                    onClick={() =>
+                      void navigate({ to: "/bots/$botId", params: { botId: botEntry.bot.id } })
+                    }
+                    className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  />
+                }
+                label={gt("Open Bot page")}
+              >
+                <BotAvatar
+                  avatar={botEntry.bot.avatar}
+                  name={botEntry.bot.name}
+                  className="size-3.5"
+                />
+                <MiddleTruncate
+                  data-slot="workspace-breadcrumb-text"
+                  value={botEntry.bot.name}
+                  showTitle={false}
+                  variant="cap-aligned"
+                />
+              </SharedTooltipTrigger>
+            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbSeparator>
+              <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
+            </WorkspaceBreadcrumbSeparator>
+          </>
+        ) : activeProject ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <SharedTooltipTrigger

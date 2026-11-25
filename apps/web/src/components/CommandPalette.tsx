@@ -63,6 +63,7 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  BotIcon,
   BugIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
@@ -88,6 +89,7 @@ import {
   WorkflowIcon,
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
+import { openNewBotDialog, useEnvironmentBots } from "../state/bots";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
 import { previewBridge } from "./preview/previewBridge";
 import {
@@ -448,6 +450,7 @@ function OpenCommandPaletteDialog(props: {
   const messages = useMessages();
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
+  const environmentBots = useEnvironmentBots();
   const { openChildSearch, setOpen } = props;
   // Keyed by palette session: the intent and restored search only seed this
   // mount, and closing must not change what the closing palette shows.
@@ -1660,6 +1663,32 @@ function OpenCommandPaletteDialog(props: {
         openNewProjectFlow();
       },
     });
+  }
+
+  if (environmentBots.environmentIds.length > 0) {
+    actionItems.push({
+      kind: "action",
+      value: "action:new-bot",
+      searchTerms: ["new bot", "create bot", "assistant", "agent", "persona", "routine"],
+      title: gt("New Bot"),
+      icon: <BotIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openNewBotDialog();
+      },
+    });
+    // Like settings, each Bot's page is a search result rather than a row in the open palette.
+    for (const { bot } of deferredQuery.trim().length > 0 ? environmentBots.bots : []) {
+      actionItems.push({
+        kind: "action",
+        value: `action:open-bot:${bot.id}`,
+        searchTerms: ["bot", bot.name, bot.role],
+        title: gt("Open Bot page: {name}", { name: bot.name }),
+        icon: <BotIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          await navigate({ to: "/bots/$botId", params: { botId: bot.id } });
+        },
+      });
+    }
   }
 
   const addProjectAction: CommandPaletteActionItem = {

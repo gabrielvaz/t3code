@@ -99,6 +99,7 @@ import {
   hasUnseenCompletion,
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
+  type SidebarThreadStatus,
   resolveSidebarRowStatus,
   resolveThreadLastVisitedAt,
   shouldRecedeSidebarThread,
@@ -597,7 +598,82 @@ const TOP_STATUS_ICONS = {
   woke: AlarmClockIcon,
 } as const;
 
-function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: string }) {
+/** The status a sidebar row shows at its top right, or null for a quiet row. */
+export function useSidebarTopStatus({
+  status,
+  goalActive,
+  isWoke,
+  isUnread,
+}: {
+  status: SidebarThreadStatus;
+  goalActive: boolean;
+  isWoke: boolean;
+  isUnread: boolean;
+}): { label: string; icon: keyof typeof TOP_STATUS_ICONS; className: string } | null {
+  const gt = useGT();
+  return status === "preparing" || status === "working"
+    ? {
+        label:
+          status === "preparing"
+            ? gt("Setting up")
+            : goalActive
+              ? gt("Goal", { $context: "thread status: working on a goal" })
+              : gt("Working", { $context: "thread status" }),
+        icon: "working" as const,
+        className: "text-info-foreground",
+      }
+    : status === "waiting"
+      ? {
+          label: gt("Waiting", { $context: "thread status" }),
+          icon: "waiting" as const,
+          className: "text-muted-foreground",
+        }
+      : status === "approval"
+        ? {
+            label: gt("Approval", { $context: "thread status: needs approval" }),
+            icon: "approval" as const,
+            className: "text-warning-foreground",
+          }
+        : status === "input"
+          ? {
+              label: gt("Input", { $context: "thread status: needs user input" }),
+              icon: "input" as const,
+              className: "text-indigo-600 dark:text-indigo-300",
+            }
+          : status === "request"
+            ? {
+                label: gt("Request", { $context: "thread status: guest request" }),
+                icon: "request" as const,
+                className: "text-guest-foreground",
+              }
+            : status === "limited"
+              ? {
+                  label: gt("Limited", { $context: "thread status: usage limited" }),
+                  icon: "failed" as const,
+                  className: "text-warning-foreground",
+                }
+              : status === "failed"
+                ? {
+                    label: gt("Failed", { $context: "thread status" }),
+                    icon: "failed" as const,
+                    className: "text-error-foreground",
+                  }
+                : isWoke
+                  ? {
+                      label: gt("Woke", { $context: "thread status: woke from snooze" }),
+                      icon: "woke" as const,
+                      className: "text-warning-foreground",
+                    }
+                  : isUnread
+                    ? {
+                        label: gt("Done", { $context: "thread status" }),
+                        icon: "done" as const,
+                        className: "text-success-foreground",
+                      }
+                    : null;
+}
+
+export function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: string }) {
   const Icon = TOP_STATUS_ICONS[props.icon];
   return <Icon aria-hidden className={cn("shrink-0", props.className)} />;
 }
@@ -816,67 +892,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isActive: props.isActive,
     isSelected,
   });
-  const topStatus =
-    status === "preparing" || status === "working"
-      ? {
-          label:
-            status === "preparing"
-              ? gt("Setting up")
-              : thread.goal?.status === "active"
-                ? gt("Goal", { $context: "thread status: working on a goal" })
-                : gt("Working", { $context: "thread status" }),
-          icon: "working" as const,
-          className: "text-info-foreground",
-        }
-      : status === "waiting"
-        ? {
-            label: gt("Waiting", { $context: "thread status" }),
-            icon: "waiting" as const,
-            className: "text-muted-foreground",
-          }
-        : status === "approval"
-          ? {
-              label: gt("Approval", { $context: "thread status: needs approval" }),
-              icon: "approval" as const,
-              className: "text-warning-foreground",
-            }
-          : status === "input"
-            ? {
-                label: gt("Input", { $context: "thread status: needs user input" }),
-                icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
-              }
-            : status === "request"
-              ? {
-                  label: gt("Request", { $context: "thread status: guest request" }),
-                  icon: "request" as const,
-                  className: "text-guest-foreground",
-                }
-              : status === "limited"
-                ? {
-                    label: gt("Limited", { $context: "thread status: usage limited" }),
-                    icon: "failed" as const,
-                    className: "text-warning-foreground",
-                  }
-                : status === "failed"
-                  ? {
-                      label: gt("Failed", { $context: "thread status" }),
-                      icon: "failed" as const,
-                      className: "text-error-foreground",
-                    }
-                  : isWoke
-                    ? {
-                        label: gt("Woke", { $context: "thread status: woke from snooze" }),
-                        icon: "woke" as const,
-                        className: "text-warning-foreground",
-                      }
-                    : isUnread
-                      ? {
-                          label: gt("Done", { $context: "thread status" }),
-                          icon: "done" as const,
-                          className: "text-success-foreground",
-                        }
-                      : null;
+  const topStatus = useSidebarTopStatus({
+    status,
+    goalActive: thread.goal?.status === "active",
+    isWoke,
+    isUnread,
+  });
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({

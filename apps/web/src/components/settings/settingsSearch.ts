@@ -32,6 +32,7 @@ export type SettingsPath =
   | "/settings/browser"
   | "/settings/devices"
   | "/settings/scheduled-tasks"
+  | "/settings/bots"
   | "/settings/source-control"
   | "/settings/worktrees"
   | "/settings/connections"
@@ -110,6 +111,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/browser": msg("Browser"),
   "/settings/devices": msg("Devices"),
   "/settings/scheduled-tasks": msg("Scheduled tasks"),
+  "/settings/bots": msg("Bots"),
   "/settings/source-control": msg("Source control & issues"),
   "/settings/worktrees": msg("Worktrees"),
   "/settings/connections": msg("Environments"),
@@ -160,6 +162,7 @@ const ALL_SETTINGS_NAV_GROUPS: ReadonlyArray<SettingsNavGroup> = [
       "/settings/browser",
       "/settings/devices",
       "/settings/scheduled-tasks",
+      "/settings/bots",
     ],
   },
   {
@@ -1131,6 +1134,30 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/scheduled-tasks",
   },
   {
+    id: "bots",
+    title: msg("Bots"),
+    to: "/settings/bots",
+    searchTerms: [msg("bot assistant persona memory instructions routines")],
+  },
+  {
+    id: "bots-about-you",
+    title: msg("About you"),
+    to: "/settings/bots",
+    searchTerms: [msg("bot name timezone time zone")],
+  },
+  {
+    id: "bots-permissions",
+    title: msg("Bot permissions"),
+    to: "/settings/bots",
+    searchTerms: [msg("bot always ask first ok without asking allow approve")],
+  },
+  {
+    id: "bots-shared-memory",
+    title: msg("Shared memory"),
+    to: "/settings/bots",
+    searchTerms: [msg("bot memory notes vault")],
+  },
+  {
     id: "agent-browser-access",
     title: msg("Agent browser access"),
     to: "/settings/browser",
@@ -1551,6 +1578,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/access": "connections",
   "/settings/secrets": null,
   "/settings/scheduled-tasks": null,
+  "/settings/bots": null,
   "/settings/maintenance": null,
   "/settings/labs": null,
   "/settings/about": null,

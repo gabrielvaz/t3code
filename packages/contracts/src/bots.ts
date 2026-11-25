@@ -13,11 +13,11 @@ import { RuntimeMode } from "./providerPolicy.ts";
 export const BotId = TrimmedNonEmptyString.pipe(Schema.brand("BotId"));
 export type BotId = typeof BotId.Type;
 
-const BOT_NAME_MAX_CHARS = 60;
-const BOT_ROLE_MAX_CHARS = 120;
+export const BOT_NAME_MAX_CHARS = 60;
+export const BOT_ROLE_MAX_CHARS = 120;
 /** A memory save larger than this is refused; it is far past what the snapshot in AGENTS.md carries. */
-const BOT_MEMORY_FILE_MAX_CHARS = 200_000;
-const BOT_INSTRUCTIONS_MAX_CHARS = 100_000;
+export const BOT_MEMORY_FILE_MAX_CHARS = 200_000;
+export const BOT_INSTRUCTIONS_MAX_CHARS = 100_000;
 
 const BotName = TrimmedNonEmptyString.check(Schema.isMaxLength(BOT_NAME_MAX_CHARS));
 const BotRole = Schema.String.check(Schema.isMaxLength(BOT_ROLE_MAX_CHARS));

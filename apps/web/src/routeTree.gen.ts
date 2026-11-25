@@ -47,12 +47,14 @@ import { Route as ChatSettingsDevicesRouteImport } from './routes/_chat.settings
 import { Route as ChatSettingsConnectionsRouteImport } from './routes/_chat.settings.connections'
 import { Route as ChatSettingsChatRouteImport } from './routes/_chat.settings.chat'
 import { Route as ChatSettingsBrowserRouteImport } from './routes/_chat.settings.browser'
+import { Route as ChatSettingsBotsRouteImport } from './routes/_chat.settings.bots'
 import { Route as ChatSettingsBetaRouteImport } from './routes/_chat.settings.beta'
 import { Route as ChatSettingsArchivedRouteImport } from './routes/_chat.settings.archived'
 import { Route as ChatSettingsAppearanceRouteImport } from './routes/_chat.settings.appearance'
 import { Route as ChatSettingsAccessRouteImport } from './routes/_chat.settings.access'
 import { Route as ChatSettingsAboutRouteImport } from './routes/_chat.settings.about'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
+import { Route as ChatBotsBotIdRouteImport } from './routes/_chat.bots.$botId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRouteImport } from './routes/_chat.linked.$viaEnvironmentId.$linkedEnvironmentId.$linkedThreadId'
 
@@ -250,6 +252,11 @@ const ChatSettingsBrowserRoute = ChatSettingsBrowserRouteImport.update({
   path: '/browser',
   getParentRoute: () => ChatSettingsRoute,
 } as any)
+const ChatSettingsBotsRoute = ChatSettingsBotsRouteImport.update({
+  id: '/bots',
+  path: '/bots',
+  getParentRoute: () => ChatSettingsRoute,
+} as any)
 const ChatSettingsBetaRoute = ChatSettingsBetaRouteImport.update({
   id: '/beta',
   path: '/beta',
@@ -278,6 +285,11 @@ const ChatSettingsAboutRoute = ChatSettingsAboutRouteImport.update({
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
   path: '/draft/$draftId',
+  getParentRoute: () => ChatRoute,
+} as any)
+const ChatBotsBotIdRoute = ChatBotsBotIdRouteImport.update({
+  id: '/bots/$botId',
+  path: '/bots/$botId',
   getParentRoute: () => ChatRoute,
 } as any)
 const ChatEnvironmentIdThreadIdRoute =
@@ -311,12 +323,14 @@ export interface FileRoutesByFullPath {
   '/workflows': typeof ChatWorkflowsRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
+  '/bots/$botId': typeof ChatBotsBotIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/settings/about': typeof ChatSettingsAboutRoute
   '/settings/access': typeof ChatSettingsAccessRoute
   '/settings/appearance': typeof ChatSettingsAppearanceRoute
   '/settings/archived': typeof ChatSettingsArchivedRoute
   '/settings/beta': typeof ChatSettingsBetaRoute
+  '/settings/bots': typeof ChatSettingsBotsRoute
   '/settings/browser': typeof ChatSettingsBrowserRoute
   '/settings/chat': typeof ChatSettingsChatRoute
   '/settings/connections': typeof ChatSettingsConnectionsRoute
@@ -358,12 +372,14 @@ export interface FileRoutesByTo {
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
+  '/bots/$botId': typeof ChatBotsBotIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/settings/about': typeof ChatSettingsAboutRoute
   '/settings/access': typeof ChatSettingsAccessRoute
   '/settings/appearance': typeof ChatSettingsAppearanceRoute
   '/settings/archived': typeof ChatSettingsArchivedRoute
   '/settings/beta': typeof ChatSettingsBetaRoute
+  '/settings/bots': typeof ChatSettingsBotsRoute
   '/settings/browser': typeof ChatSettingsBrowserRoute
   '/settings/chat': typeof ChatSettingsChatRoute
   '/settings/connections': typeof ChatSettingsConnectionsRoute
@@ -407,12 +423,14 @@ export interface FileRoutesById {
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
+  '/_chat/bots/$botId': typeof ChatBotsBotIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/_chat/settings/about': typeof ChatSettingsAboutRoute
   '/_chat/settings/access': typeof ChatSettingsAccessRoute
   '/_chat/settings/appearance': typeof ChatSettingsAppearanceRoute
   '/_chat/settings/archived': typeof ChatSettingsArchivedRoute
   '/_chat/settings/beta': typeof ChatSettingsBetaRoute
+  '/_chat/settings/bots': typeof ChatSettingsBotsRoute
   '/_chat/settings/browser': typeof ChatSettingsBrowserRoute
   '/_chat/settings/chat': typeof ChatSettingsChatRoute
   '/_chat/settings/connections': typeof ChatSettingsConnectionsRoute
@@ -456,12 +474,14 @@ export interface FileRouteTypes {
     | '/workflows'
     | '/projects/$projectKey'
     | '/$environmentId/$threadId'
+    | '/bots/$botId'
     | '/draft/$draftId'
     | '/settings/about'
     | '/settings/access'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/bots'
     | '/settings/browser'
     | '/settings/chat'
     | '/settings/connections'
@@ -503,12 +523,14 @@ export interface FileRouteTypes {
     | '/projects/$projectKey'
     | '/'
     | '/$environmentId/$threadId'
+    | '/bots/$botId'
     | '/draft/$draftId'
     | '/settings/about'
     | '/settings/access'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
+    | '/settings/bots'
     | '/settings/browser'
     | '/settings/chat'
     | '/settings/connections'
@@ -551,12 +573,14 @@ export interface FileRouteTypes {
     | '/projects/$projectKey'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
+    | '/_chat/bots/$botId'
     | '/_chat/draft/$draftId'
     | '/_chat/settings/about'
     | '/_chat/settings/access'
     | '/_chat/settings/appearance'
     | '/_chat/settings/archived'
     | '/_chat/settings/beta'
+    | '/_chat/settings/bots'
     | '/_chat/settings/browser'
     | '/_chat/settings/chat'
     | '/_chat/settings/connections'
@@ -863,6 +887,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatSettingsBrowserRouteImport
       parentRoute: typeof ChatSettingsRoute
     }
+    '/_chat/settings/bots': {
+      id: '/_chat/settings/bots'
+      path: '/bots'
+      fullPath: '/settings/bots'
+      preLoaderRoute: typeof ChatSettingsBotsRouteImport
+      parentRoute: typeof ChatSettingsRoute
+    }
     '/_chat/settings/beta': {
       id: '/_chat/settings/beta'
       path: '/beta'
@@ -905,6 +936,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatDraftDraftIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/bots/$botId': {
+      id: '/_chat/bots/$botId'
+      path: '/bots/$botId'
+      fullPath: '/bots/$botId'
+      preLoaderRoute: typeof ChatBotsBotIdRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/$environmentId/$threadId': {
       id: '/_chat/$environmentId/$threadId'
       path: '/$environmentId/$threadId'
@@ -928,6 +966,7 @@ interface ChatSettingsRouteChildren {
   ChatSettingsAppearanceRoute: typeof ChatSettingsAppearanceRoute
   ChatSettingsArchivedRoute: typeof ChatSettingsArchivedRoute
   ChatSettingsBetaRoute: typeof ChatSettingsBetaRoute
+  ChatSettingsBotsRoute: typeof ChatSettingsBotsRoute
   ChatSettingsBrowserRoute: typeof ChatSettingsBrowserRoute
   ChatSettingsChatRoute: typeof ChatSettingsChatRoute
   ChatSettingsConnectionsRoute: typeof ChatSettingsConnectionsRoute
@@ -958,6 +997,7 @@ const ChatSettingsRouteChildren: ChatSettingsRouteChildren = {
   ChatSettingsAppearanceRoute: ChatSettingsAppearanceRoute,
   ChatSettingsArchivedRoute: ChatSettingsArchivedRoute,
   ChatSettingsBetaRoute: ChatSettingsBetaRoute,
+  ChatSettingsBotsRoute: ChatSettingsBotsRoute,
   ChatSettingsBrowserRoute: ChatSettingsBrowserRoute,
   ChatSettingsChatRoute: ChatSettingsChatRoute,
   ChatSettingsConnectionsRoute: ChatSettingsConnectionsRoute,
@@ -995,6 +1035,7 @@ interface ChatRouteChildren {
   ChatWorkflowsRoute: typeof ChatWorkflowsRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ChatEnvironmentIdThreadIdRoute: typeof ChatEnvironmentIdThreadIdRoute
+  ChatBotsBotIdRoute: typeof ChatBotsBotIdRoute
   ChatDraftDraftIdRoute: typeof ChatDraftDraftIdRoute
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute: typeof ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute
 }
@@ -1008,6 +1049,7 @@ const ChatRouteChildren: ChatRouteChildren = {
   ChatWorkflowsRoute: ChatWorkflowsRoute,
   ChatIndexRoute: ChatIndexRoute,
   ChatEnvironmentIdThreadIdRoute: ChatEnvironmentIdThreadIdRoute,
+  ChatBotsBotIdRoute: ChatBotsBotIdRoute,
   ChatDraftDraftIdRoute: ChatDraftDraftIdRoute,
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute:
     ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute,

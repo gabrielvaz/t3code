@@ -1,4 +1,10 @@
-import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  BotIcon,
+  ChartNoAxesColumnIcon,
+  SettingsIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { T, useGT } from "gt-react";
 import { memo } from "react";
@@ -15,6 +21,7 @@ import {
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { cn } from "../../lib/utils";
 import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
+import { openNewBotDialog, useEnvironmentBots } from "../../state/bots";
 import { T3Wordmark } from "../T3Wordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -234,6 +241,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   });
   const pullRequestsSupported = usePullRequestsSupported();
   const issuesSupported = useIssuesSupported();
+  const environmentBots = useEnvironmentBots();
+  // Once a Bot exists, the sidebar's Bots section has its own New Bot button.
+  const offersNewBot =
+    environmentBots.environmentIds.length > 0 && environmentBots.bots.length === 0;
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -297,6 +308,16 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               icon={<IssueGlyph.issue />}
               label={gt("Issues", { $context: "sidebar link to the list of issues" })}
               onClick={handleIssuesClick}
+            />
+          ) : null}
+          {offersNewBot ? (
+            <SidebarUtilityItem
+              icon={<BotIcon />}
+              label={gt("New Bot")}
+              onClick={() => {
+                closeMobileSidebar();
+                openNewBotDialog();
+              }}
             />
           ) : null}
           <SidebarUtilityItem

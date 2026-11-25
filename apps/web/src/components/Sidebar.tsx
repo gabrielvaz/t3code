@@ -284,6 +284,9 @@ import {
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
 } from "./sidebar/SidebarProjectFolderHeader";
+import { SidebarBotsBlock } from "./sidebar/SidebarBotsBlock";
+import { botThreadKeys, sortBotsForSidebar, withoutBotThreads } from "./bots/bots.logic";
+import { useEnvironmentBots } from "../state/bots";
 import {
   SidebarDragBoundary,
   SidebarSectionHeader,
@@ -1129,11 +1132,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
   const threads = useQuietThreadShells();
+  const { bots: environmentBots } = useEnvironmentBots();
+  const sidebarBots = sortBotsForSidebar(environmentBots);
+  const shelfThreads = withoutBotThreads(threads, botThreadKeys(environmentBots));
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
-      ? threads
-      : threads.map((thread) =>
+      ? shelfThreads
+      : shelfThreads.map((thread) =>
           promotingDraftThreadKeys.includes(threadShellKey(thread))
             ? asLaunchingThread(thread)
             : thread,
@@ -1158,7 +1164,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     isSearching: isSearchingThreads,
     scopedProjectKeys: chosenScopeProjectKeys,
     delegatedUnderParent,
-    findThread: (key) => threads.find((candidate) => threadShellKey(candidate) === key),
+    findThread: (key) => shelfThreads.find((candidate) => threadShellKey(candidate) === key),
   });
   const projectScopeKeys = revealWidensScope ? [] : chosenProjectScopeKeys;
   const projectScopeKey = projectScopeKeys.length === 0 ? null : projectScopeKeys.join("\n");
@@ -3608,6 +3614,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     };
                     const from = isContextDrag ? null : (dragState?.activeSection ?? null);
                     const items: ReactNode[] = [
+                      <SidebarBotsBlock
+                        key="bots"
+                        bots={sidebarBots}
+                        routeRowThreadKey={routeRowThreadKey}
+                        revealRef={revealActiveRow}
+                        onNavigate={navigateToThread}
+                      />,
                       <SidebarDraftBlock
                         key="draft-sessions"
                         draftIds={draftIds}
