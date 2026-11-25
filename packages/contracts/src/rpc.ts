@@ -458,6 +458,25 @@ import {
   ScheduledTaskUpsertInput,
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
+import {
+  BotCreateInput,
+  BotDeleteInput,
+  BotDeleteResult,
+  BotError,
+  BotGetInstructionsInput,
+  BotGetInstructionsResult,
+  BotGetMemoryInput,
+  BotGetMemoryResult,
+  BotListInput,
+  BotListResult,
+  BotMutationResult,
+  BotSaveInstructionsInput,
+  BotSaveMemoryInput,
+  BotSaveSettingsInput,
+  BotSaveSettingsResult,
+  BotSaveTextResult,
+  BotUpdateInput,
+} from "./bots.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
 import {
@@ -662,6 +681,16 @@ export const WS_METHODS = {
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
+
+  botsSubscribe: "bots.subscribe",
+  botsCreate: "bots.create",
+  botsUpdate: "bots.update",
+  botsDelete: "bots.delete",
+  botsGetMemory: "bots.getMemory",
+  botsSaveMemory: "bots.saveMemory",
+  botsGetInstructions: "bots.getInstructions",
+  botsSaveInstructions: "bots.saveInstructions",
+  botsSaveSettings: "bots.saveSettings",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -2479,6 +2508,63 @@ const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeResourceTel
   stream: true,
 });
 
+const WsBotError = Schema.Union([BotError, EnvironmentAuthorizationError]);
+
+const WsBotsSubscribeRpc = Rpc.make(WS_METHODS.botsSubscribe, {
+  payload: BotListInput,
+  success: BotListResult,
+  error: WsBotError,
+  stream: true,
+});
+
+const WsBotsCreateRpc = Rpc.make(WS_METHODS.botsCreate, {
+  payload: BotCreateInput,
+  success: BotMutationResult,
+  error: WsBotError,
+});
+
+const WsBotsUpdateRpc = Rpc.make(WS_METHODS.botsUpdate, {
+  payload: BotUpdateInput,
+  success: BotMutationResult,
+  error: WsBotError,
+});
+
+const WsBotsDeleteRpc = Rpc.make(WS_METHODS.botsDelete, {
+  payload: BotDeleteInput,
+  success: BotDeleteResult,
+  error: WsBotError,
+});
+
+const WsBotsGetMemoryRpc = Rpc.make(WS_METHODS.botsGetMemory, {
+  payload: BotGetMemoryInput,
+  success: BotGetMemoryResult,
+  error: WsBotError,
+});
+
+const WsBotsSaveMemoryRpc = Rpc.make(WS_METHODS.botsSaveMemory, {
+  payload: BotSaveMemoryInput,
+  success: BotSaveTextResult,
+  error: WsBotError,
+});
+
+const WsBotsGetInstructionsRpc = Rpc.make(WS_METHODS.botsGetInstructions, {
+  payload: BotGetInstructionsInput,
+  success: BotGetInstructionsResult,
+  error: WsBotError,
+});
+
+const WsBotsSaveInstructionsRpc = Rpc.make(WS_METHODS.botsSaveInstructions, {
+  payload: BotSaveInstructionsInput,
+  success: BotSaveTextResult,
+  error: WsBotError,
+});
+
+const WsBotsSaveSettingsRpc = Rpc.make(WS_METHODS.botsSaveSettings, {
+  payload: BotSaveSettingsInput,
+  success: BotSaveSettingsResult,
+  error: WsBotError,
+});
+
 export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthorization>()(
   "t3/contracts/RpcScopeAuthorization",
   { error: EnvironmentAuthorizationError },
@@ -2586,6 +2672,15 @@ export const WsRpcGroup = RpcGroup.make(
   WsAgentFeedbackAnswerRequestRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
+  WsBotsSubscribeRpc,
+  WsBotsCreateRpc,
+  WsBotsUpdateRpc,
+  WsBotsDeleteRpc,
+  WsBotsGetMemoryRpc,
+  WsBotsSaveMemoryRpc,
+  WsBotsGetInstructionsRpc,
+  WsBotsSaveInstructionsRpc,
+  WsBotsSaveSettingsRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,

@@ -85,6 +85,13 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksRunNow]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksRotateWebhookToken]: AuthOrchestrationOperateScope,
+  // A Bot is a project and thread with files its agent reads, so editing one operates threads.
+  [WS_METHODS.botsCreate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsUpdate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsDelete]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsSaveMemory]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsSaveInstructions]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsSaveSettings]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: AuthOrchestrationOperateScope,
   // An answer, a resume and a cancel each decide what a run's agents do next.
   [WS_METHODS.workflowsAnswer]: AuthOrchestrationOperateScope,

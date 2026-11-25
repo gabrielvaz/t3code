@@ -1685,6 +1685,18 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,
     }),
+    botsLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:bots:live",
+      tag: WS_METHODS.botsSubscribe,
+    }),
+    botMemory: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:memory",
+      tag: WS_METHODS.botsGetMemory,
+    }),
+    botInstructions: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:instructions",
+      tag: WS_METHODS.botsGetInstructions,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan. With
     // nothing to show yet, the server's last scan answers first, then a plain
@@ -1958,6 +1970,40 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    createBot: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:create",
+      tag: WS_METHODS.botsCreate,
+    }),
+    updateBot: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:update",
+      tag: WS_METHODS.botsUpdate,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    deleteBot: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:delete",
+      tag: WS_METHODS.botsDelete,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    saveBotMemory: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:save-memory",
+      tag: WS_METHODS.botsSaveMemory,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    saveBotInstructions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:save-instructions",
+      tag: WS_METHODS.botsSaveInstructions,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    saveBotSettings: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:save-settings",
+      tag: WS_METHODS.botsSaveSettings,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
     }),
     upsertScheduledTask: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:upsert",

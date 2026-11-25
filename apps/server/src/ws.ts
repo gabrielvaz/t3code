@@ -135,6 +135,7 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as Bots from "./bots/BotService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -1510,6 +1511,7 @@ export const layerWsRpc = (
       const threadViewers = yield* ThreadViewers.ThreadViewers;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const bots = yield* Bots.BotService;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2463,6 +2465,15 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.rotateWebhookToken(input)),
           ),
+        [WS_METHODS.botsSubscribe]: (_input) => bots.subscribe(),
+        [WS_METHODS.botsCreate]: (input) => bots.create(input),
+        [WS_METHODS.botsUpdate]: (input) => bots.update(input),
+        [WS_METHODS.botsDelete]: (input) => bots.delete(input),
+        [WS_METHODS.botsGetMemory]: (input) => bots.getMemory(input),
+        [WS_METHODS.botsSaveMemory]: (input) => bots.saveMemory(input),
+        [WS_METHODS.botsGetInstructions]: (input) => bots.getInstructions(input),
+        [WS_METHODS.botsSaveInstructions]: (input) => bots.saveInstructions(input),
+        [WS_METHODS.botsSaveSettings]: (input) => bots.saveSettings(input),
         [WS_METHODS.guestShareCreate]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(guestShares.create(input)),
