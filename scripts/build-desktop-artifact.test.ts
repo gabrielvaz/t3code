@@ -19,6 +19,7 @@ import * as Sink from "effect/Sink";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { FORK_IDENTITY } from "@t3tools/shared/forkIdentity";
 import { fromYaml } from "@t3tools/shared/schemaYaml";
 
 import {
@@ -539,14 +540,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.isNull(preview.publish);
       assert.isNull(previewChannel.publish);
-      assert.deepStrictEqual(release.publish, [
-        {
-          provider: "github",
-          owner: "pingdotgg",
-          repo: "t3code",
-          releaseType: "release",
-        },
-      ]);
+      // The fork has no update feed, so even release builds with GITHUB_REPOSITORY publish none.
+      assert.isNull(release.publish);
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(
@@ -576,15 +571,17 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.gen(function* () {
       const appImageName = (version: string) =>
         createBuildConfig("linux", "AppImage", version, false, false, undefined, undefined).pipe(
-          Effect.map((config) => (config.appImage as { artifactName: string }).artifactName),
+          Effect.map(
+            (config) => (config.appImage as { artifactName: string } | undefined)?.artifactName,
+          ),
         );
 
       const stable = yield* appImageName("0.0.37");
       const nightly = yield* appImageName("0.0.38-nightly.20261026.3740");
 
-      assert.notInclude(stable, "${version}");
-      assert.notInclude(nightly, "${version}");
-      assert.notEqual(stable, nightly);
+      // The fork has no update feed, so AppImages keep the default versioned name.
+      assert.isUndefined(stable);
+      assert.isUndefined(nightly);
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(
@@ -1567,7 +1564,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: FORK_IDENTITY.appId,
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1590,7 +1587,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, `<string>ABC1234567.${FORK_IDENTITY.appId}</string>`);
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
