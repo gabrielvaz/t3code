@@ -476,6 +476,16 @@ import {
   BotSaveSettingsResult,
   BotSaveTextResult,
   BotUpdateInput,
+  BotVaultDeleteInput,
+  BotVaultDeleteResult,
+  BotVaultImportCsvInput,
+  BotVaultImportCsvResult,
+  BotVaultListInput,
+  BotVaultListResult,
+  BotVaultRevealInput,
+  BotVaultRevealResult,
+  BotVaultUpsertInput,
+  BotVaultUpsertResult,
 } from "./bots.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
@@ -691,6 +701,11 @@ export const WS_METHODS = {
   botsGetInstructions: "bots.getInstructions",
   botsSaveInstructions: "bots.saveInstructions",
   botsSaveSettings: "bots.saveSettings",
+  botsVaultList: "bots.vaultList",
+  botsVaultUpsert: "bots.vaultUpsert",
+  botsVaultDelete: "bots.vaultDelete",
+  botsVaultReveal: "bots.vaultReveal",
+  botsVaultImportCsv: "bots.vaultImportCsv",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -2565,6 +2580,36 @@ const WsBotsSaveSettingsRpc = Rpc.make(WS_METHODS.botsSaveSettings, {
   error: WsBotError,
 });
 
+const WsBotsVaultListRpc = Rpc.make(WS_METHODS.botsVaultList, {
+  payload: BotVaultListInput,
+  success: BotVaultListResult,
+  error: WsBotError,
+});
+
+const WsBotsVaultUpsertRpc = Rpc.make(WS_METHODS.botsVaultUpsert, {
+  payload: BotVaultUpsertInput,
+  success: BotVaultUpsertResult,
+  error: WsBotError,
+});
+
+const WsBotsVaultDeleteRpc = Rpc.make(WS_METHODS.botsVaultDelete, {
+  payload: BotVaultDeleteInput,
+  success: BotVaultDeleteResult,
+  error: WsBotError,
+});
+
+const WsBotsVaultRevealRpc = Rpc.make(WS_METHODS.botsVaultReveal, {
+  payload: BotVaultRevealInput,
+  success: BotVaultRevealResult,
+  error: WsBotError,
+});
+
+const WsBotsVaultImportCsvRpc = Rpc.make(WS_METHODS.botsVaultImportCsv, {
+  payload: BotVaultImportCsvInput,
+  success: BotVaultImportCsvResult,
+  error: WsBotError,
+});
+
 export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthorization>()(
   "t3/contracts/RpcScopeAuthorization",
   { error: EnvironmentAuthorizationError },
@@ -2681,6 +2726,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsBotsGetInstructionsRpc,
   WsBotsSaveInstructionsRpc,
   WsBotsSaveSettingsRpc,
+  WsBotsVaultListRpc,
+  WsBotsVaultUpsertRpc,
+  WsBotsVaultDeleteRpc,
+  WsBotsVaultRevealRpc,
+  WsBotsVaultImportCsvRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,

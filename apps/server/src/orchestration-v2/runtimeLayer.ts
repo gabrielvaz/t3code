@@ -65,6 +65,7 @@ import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as BotService from "../bots/BotService.ts";
+import * as BotVault from "../bots/BotVault.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as FeedbackStore from "../feedback/FeedbackStore.ts";
 import * as WorkspaceFolders from "../workspace/WorkspaceFolders.ts";
@@ -348,7 +349,13 @@ const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
   ),
 );
 const layerBotServiceProvided = BotService.layer.pipe(
-  Layer.provide(Layer.merge(layerThreadLaunchProvided, layerThreadManagementProvided)),
+  Layer.provide(
+    Layer.mergeAll(
+      layerThreadLaunchProvided,
+      layerThreadManagementProvided,
+      layerScheduledTaskProvided,
+    ),
+  ),
 );
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
@@ -446,6 +453,7 @@ export const layerProduction = Layer.mergeAll(
   layerThreadLaunchProvided,
   layerScheduledTaskProvided,
   layerBotServiceProvided,
+  BotVault.layer,
   layerWorkflowsProvided,
   layerScratchThreadPromotionProvided,
   layerSecretRequestsProvided,

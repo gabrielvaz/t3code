@@ -32,6 +32,7 @@ import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { BotAvatar } from "./BotAvatar";
 import { BotSharedMemoryEditor } from "./BotPage";
+import { BotVaultSettings } from "./BotVaultSettings";
 import { parseBotRuleList, sortBotsForSidebar } from "./bots.logic";
 
 function deviceTimeZone(): string {
@@ -323,6 +324,8 @@ function BotsSharedSettingsSections({
         cwd={undefined}
         onReload={memoryQuery.refresh}
       />
+
+      <BotVaultSettings environmentId={environmentId} />
     </>
   );
 }

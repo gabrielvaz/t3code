@@ -1158,6 +1158,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("bot memory notes vault")],
   },
   {
+    id: "bots-vault",
+    title: msg("Vault"),
+    to: "/settings/bots",
+    searchTerms: [
+      msg("bot vault passwords logins api tokens contacts address import csv 1password"),
+    ],
+  },
+  {
     id: "agent-browser-access",
     title: msg("Agent browser access"),
     to: "/settings/browser",

@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { BOT_NAME_MAX_CHARS, BOT_ROLE_MAX_CHARS } from "@t3tools/contracts";
+import { BOT_NAME_MAX_CHARS, BOT_ROLE_MAX_CHARS, type BotMemoryTidy } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import { MessageSquareIcon, Trash2Icon } from "lucide-react";
@@ -12,11 +12,14 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { BotAvatarPicker } from "./BotAvatarPicker";
 import { BotModelPicker } from "./BotModelPicker";
 import { BotRuntimeModeSelect } from "./BotRuntimeModeSelect";
 import { useBotActions } from "./useBotActions";
+
+const MEMORY_TIDY_OPTIONS: ReadonlyArray<BotMemoryTidy> = ["off", "daily", "weekly"];
 
 /** A text field that saves when it loses focus or on Enter, and reverts on Escape. */
 function BotTextSetting({
@@ -64,6 +67,11 @@ function BotTextSetting({
 
 export function BotDetailsTab({ entry }: { entry: EnvironmentBot }) {
   const gt = useGT();
+  const memoryTidyLabels: Record<BotMemoryTidy, string> = {
+    off: gt("Off"),
+    daily: gt("Daily"),
+    weekly: gt("Weekly, on Mondays"),
+  };
   const { bot, environmentId } = entry;
   const canOperate = useAtomValue(serverEnvironment.updateBot.permissionAtom(environmentId));
   const canDelete = useAtomValue(serverEnvironment.deleteBot.permissionAtom(environmentId));
@@ -148,6 +156,34 @@ export function BotDetailsTab({ entry }: { entry: EnvironmentBot }) {
               disabled={!canOperate}
               onChange={(runtimeMode) => void update(entry, { runtimeMode })}
             />
+          }
+        />
+        <SettingsRow
+          title={gt("Tidy memory")}
+          description={gt(
+            "A routine that merges, trims and dates the Bot's memory at 3:30 in its own thread.",
+          )}
+          control={
+            <Select
+              value={bot.memoryTidy}
+              disabled={!canOperate}
+              onValueChange={(memoryTidy) => {
+                if (memoryTidy !== null && memoryTidy !== bot.memoryTidy) {
+                  void update(entry, { memoryTidy });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" aria-label={gt("Tidy memory")}>
+                <SelectValue>{memoryTidyLabels[bot.memoryTidy]}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {MEMORY_TIDY_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option} label={memoryTidyLabels[option]}>
+                    {memoryTidyLabels[option]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           }
         />
         <SettingsRow

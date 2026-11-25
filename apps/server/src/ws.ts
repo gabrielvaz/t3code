@@ -136,6 +136,7 @@ import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts"
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Bots from "./bots/BotService.ts";
+import * as BotVault from "./bots/BotVault.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -1512,6 +1513,7 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const bots = yield* Bots.BotService;
+      const botVault = yield* BotVault.BotVault;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2474,6 +2476,12 @@ export const layerWsRpc = (
         [WS_METHODS.botsGetInstructions]: (input) => bots.getInstructions(input),
         [WS_METHODS.botsSaveInstructions]: (input) => bots.saveInstructions(input),
         [WS_METHODS.botsSaveSettings]: (input) => bots.saveSettings(input),
+        [WS_METHODS.botsVaultList]: (_input) => botVault.list,
+        [WS_METHODS.botsVaultUpsert]: (input) => botVault.upsert(input),
+        [WS_METHODS.botsVaultDelete]: (input) => botVault.delete(input.id),
+        [WS_METHODS.botsVaultReveal]: (input) =>
+          botVault.reveal(input.id).pipe(Effect.map((password) => ({ password }))),
+        [WS_METHODS.botsVaultImportCsv]: (input) => botVault.importItems(input.items),
         [WS_METHODS.guestShareCreate]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(guestShares.create(input)),

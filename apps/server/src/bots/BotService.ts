@@ -23,7 +23,11 @@ import {
   BotStorageError,
   type BotUpdateInput,
   CommandId,
+  type ModelSelection,
   ProjectId,
+  type ScheduledTask,
+  ScheduledTaskId,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
@@ -47,6 +51,7 @@ import * as ServerConfig from "../config.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
+import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { botAvatarFileName } from "./BotAvatarSvg.ts";
 import {
@@ -59,7 +64,13 @@ import {
   writeTextAtomic,
   writeTextIfChanged,
 } from "./BotFiles.ts";
-import { memorySnapshot, normalizeSavedText, renderMemoryBlock, revisionOf } from "./BotMemory.ts";
+import {
+  BOT_MEMORY_LIMITS,
+  memorySnapshot,
+  normalizeSavedText,
+  renderMemoryBlock,
+  revisionOf,
+} from "./BotMemory.ts";
 import {
   BOT_CLAUDE_MD,
   customInstructions,
@@ -98,8 +109,30 @@ export class BotService extends Context.Service<
     readonly saveSettings: (
       input: BotSaveSettingsInput,
     ) => Effect.Effect<BotSaveSettingsResult, BotServiceError>;
+    /** The Bot whose main thread this is, from memory; null for every other thread. */
+    readonly botForThread: (threadId: ThreadId) => Effect.Effect<Bot | null>;
   }
 >()("t3/bots/BotService") {}
+
+export const MEMORY_TIDY_TITLE = "Tidy memory";
+
+/** Adapted from Threebot server/memory-tidy.mts `memoryTidyPrompt` (MIT). */
+const MEMORY_TIDY_PROMPT = `Tidy your memory now. Work only inside your \`memory/\` folder and answer with one short paragraph.
+
+1. Read \`memory/MEMORY.md\` and \`memory/log.md\`.
+2. Keep \`MEMORY.md\` inside the snapshot budget: ${BOT_MEMORY_LIMITS.snapshotBotLines} lines and ${BOT_MEMORY_LIMITS.snapshotBotChars.toLocaleString("en-US")} characters. Only that much is copied into a fresh session, so anything past it is invisible. Count by reading the file; do not run shell commands.
+3. Merge repeated facts into one short line under its heading. When two lines disagree, keep the newest and delete the older. Move dated diary entries to \`memory/log.md\`.
+4. Remove only what you can prove is stale, superseded or contradicted by a newer line. Never delete a unique fact you cannot verify; list it instead.
+5. Leave the user's own wording alone when it is already a clear fact.
+6. Report the final line and character count, what you merged, removed or moved, and anything you left for the user to decide. If nothing changed, say so in one line.`;
+
+function memoryTidySchedule(frequency: "daily" | "weekly") {
+  return {
+    type: "fixed_time" as const,
+    timeOfDay: "03:30",
+    ...(frequency === "weekly" ? { weekdays: [1] } : {}),
+  };
+}
 
 const DEFAULT_SETTINGS: BotsSharedSettings = {
   userName: "",
@@ -143,6 +176,9 @@ function expectedFaviconPath(bot: Bot): string {
   return `.bot/${botAvatarFileName(renderBotAvatarSvg(bot.avatar, bot.name))}`;
 }
 
+const sameModel = (a: ModelSelection | null, b: ModelSelection | null) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
 function validateAvatar(avatar: BotAvatar): BotInvalidError | null {
   if (!isBotAvatarColor(avatar.color)) {
     return new BotInvalidError({ detail: "Use a palette colour or a hex colour like #3fa7d6." });
@@ -161,7 +197,10 @@ const make = Effect.gen(function* () {
   const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
   const threads = yield* ThreadManagementService.ThreadManagementService;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
   const random = yield* SecureRandom.SecureRandom;
+  // MCP asks on every request whether the caller is a Bot thread, so this stays in memory.
+  const botsByThread = yield* Ref.make<ReadonlyMap<ThreadId, Bot>>(new Map());
 
   const root = path.join(config.stateDir, "bots");
   const shared = sharedPaths(path, root);
@@ -220,9 +259,14 @@ const make = Effect.gen(function* () {
         ),
       { concurrency: 8 },
     );
-    return bots
+    const sorted = bots
       .filter((bot): bot is Bot => bot !== null)
       .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+    yield* Ref.set(
+      botsByThread,
+      new Map(sorted.flatMap((bot) => (bot.threadId === null ? [] : [[bot.threadId, bot]]))),
+    );
+    return sorted;
   });
 
   const list: BotService["Service"]["list"] = Effect.gen(function* () {
@@ -253,6 +297,10 @@ const make = Effect.gen(function* () {
     const encoded = yield* encodeBot(bot).pipe(Effect.mapError(storage("write", bot.id)));
     // @effect-diagnostics-next-line globalJsonInEffect:off -- the schema's encoded form is plain JSON data
     yield* write(pathsOf(bot).record, `${JSON.stringify(encoded, null, 2)}\n`, bot.id);
+    const threadId = bot.threadId;
+    if (threadId !== null) {
+      yield* Ref.update(botsByThread, (bots) => new Map(bots).set(threadId, bot));
+    }
   });
 
   /** Writes the avatar SVG and returns the favicon path, relative to the Bot's folder. */
@@ -349,15 +397,108 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const resolveModel = Effect.fn("BotService.resolveModel")(function* (
+    model: ModelSelection | null | undefined,
+  ) {
+    const serverConfig = yield* serverSettings.getSettings.pipe(
+      Effect.mapError(storage("resolve-model")),
+    );
+    return model ?? resolveProjectSettings(serverConfig, null).settings.defaultModelSelection;
+  });
+
+  const commandId = (prefix: string, id: BotId) =>
+    random.uuidV4().pipe(
+      Effect.map((uuid) => CommandId.make(`${prefix}:${id}:${uuid}`)),
+      Effect.mapError(storage("configure-thread", id)),
+    );
+
+  /** Keeps the Bot's thread in step with its name, model and runtime mode. */
+  const syncThread = Effect.fn("BotService.syncThread")(function* (bot: Bot, current: Bot) {
+    const threadId = bot.threadId;
+    if (threadId === null) return;
+    const dispatch = (command: Parameters<typeof threads.dispatch>[0]) =>
+      threads.dispatch(command).pipe(Effect.mapError(storage("configure-thread", bot.id)));
+    if (bot.name !== current.name) {
+      yield* dispatch({
+        type: "thread.metadata.update",
+        commandId: yield* commandId("bot-thread-title", bot.id),
+        threadId,
+        title: bot.name,
+      });
+    }
+    if (bot.model !== null && !sameModel(bot.model, current.model)) {
+      yield* dispatch({
+        type: "thread.model-selection.set",
+        commandId: yield* commandId("bot-thread-model", bot.id),
+        threadId,
+        modelSelection: bot.model,
+      });
+    }
+    if (bot.runtimeMode !== current.runtimeMode) {
+      yield* dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: yield* commandId("bot-thread-runtime", bot.id),
+        threadId,
+        runtimeMode: bot.runtimeMode,
+      });
+    }
+  });
+
+  /**
+   * Creates, edits or pauses the Bot's "Tidy memory" routine and returns its id. It runs in its own
+   * thread in the Bot's project: a fresh session each night would wipe the Bot's main conversation.
+   */
+  const applyMemoryTidy = Effect.fn("BotService.applyMemoryTidy")(function* (bot: Bot) {
+    const tidyError = storage("memory-tidy", bot.id);
+    const existing: ScheduledTask | undefined =
+      bot.memoryTidyTaskId === null
+        ? undefined
+        : (yield* scheduledTasks.list().pipe(Effect.mapError(tidyError))).tasks.find(
+            (task) => task?.id === bot.memoryTidyTaskId,
+          );
+    if (bot.memoryTidy === "off") {
+      if (existing === undefined) return null;
+      yield* scheduledTasks
+        .setEnabled({ id: existing.id, enabled: false })
+        .pipe(Effect.mapError(tidyError));
+      return existing.id;
+    }
+    if (bot.projectId === null) return null;
+    const modelSelection = existing?.modelSelection ?? (yield* resolveModel(bot.model));
+    if (modelSelection === null) {
+      return yield* new BotInvalidError({ detail: "Choose a model for this Bot first." });
+    }
+    const saved = yield* scheduledTasks
+      .upsert({
+        ...(existing === undefined ? {} : { id: existing.id, requireExisting: true }),
+        commandId: yield* commandId("bot-memory-tidy", bot.id),
+        title: MEMORY_TIDY_TITLE,
+        prompt: MEMORY_TIDY_PROMPT,
+        enabled: true,
+        schedule: memoryTidySchedule(bot.memoryTidy),
+        projectId: bot.projectId,
+        threadId: existing?.threadId ?? null,
+        threadMode: "fresh_session",
+        workspaceStrategy: { type: "root" },
+        modelSelection,
+        // It only edits files inside memory/.
+        runtimeMode: "auto-accept-edits",
+        interactionMode: "default",
+        createdBy: "user",
+        creationSource: "web",
+      })
+      .pipe(Effect.mapError(tidyError));
+    return saved.task.id;
+  });
+
+  const deleteScheduledTask = (id: string) =>
+    scheduledTasks.delete({ id: ScheduledTaskId.make(id) }).pipe(Effect.ignoreCause({ log: true }));
+
   const create: BotService["Service"]["create"] = Effect.fn("BotService.create")(function* (input) {
     const avatar = input.avatar ?? DEFAULT_AVATAR;
     const invalid = validateAvatar(avatar);
     if (invalid !== null) return yield* invalid;
-    const serverConfig = yield* serverSettings.getSettings.pipe(
-      Effect.mapError(storage("resolve-model")),
-    );
-    const modelSelection =
-      input.model ?? resolveProjectSettings(serverConfig, null).settings.defaultModelSelection;
+    const modelSelection = yield* resolveModel(input.model);
     if (modelSelection === null) {
       return yield* new BotInvalidError({
         detail: "Choose a model for this Bot: there is no default model.",
@@ -484,7 +625,7 @@ const make = Effect.gen(function* () {
     }
     const { bot: current, bots } = yield* findBot(input.id);
     const settings = yield* readSettings();
-    const bot: Bot = {
+    let bot: Bot = {
       ...current,
       ...(input.name === undefined ? {} : { name: input.name }),
       ...(input.role === undefined ? {} : { role: input.role.trim() }),
@@ -497,6 +638,9 @@ const make = Effect.gen(function* () {
       ...(input.memoryTidy === undefined ? {} : { memoryTidy: input.memoryTidy }),
       updatedAt: yield* nowIso,
     };
+    if (input.memoryTidy !== undefined && input.memoryTidy !== current.memoryTidy) {
+      bot = { ...bot, memoryTidyTaskId: yield* applyMemoryTidy(bot) };
+    }
     yield* writeRecord(bot);
     if (input.primary === true) yield* clearOtherPrimaries(bots, bot.id);
     const faviconPath = yield* renderBot(bot, settings);
@@ -504,6 +648,8 @@ const make = Effect.gen(function* () {
       ...(bot.name === current.name ? {} : { title: bot.name }),
       ...(faviconPath === expectedFaviconPath(current) ? {} : { faviconPath }),
     });
+    // The record is saved; a thread that cannot follow (say, mid-run) must not fail the edit.
+    yield* syncThread(bot, current).pipe(Effect.ignoreCause({ log: true }));
     yield* notifyChanged;
     return { bot };
   }, lock.withPermits(1));
@@ -513,6 +659,11 @@ const make = Effect.gen(function* () {
   ) {
     yield* Effect.annotateCurrentSpan({ "bot.id": input.id });
     const { bot } = yield* findBot(input.id);
+    // Routines bound to the Bot's thread, and its memory tidy, would otherwise outlive it.
+    if (bot.threadId !== null) {
+      yield* scheduledTasks.deleteForThread(bot.threadId).pipe(Effect.ignoreCause({ log: true }));
+    }
+    if (bot.memoryTidyTaskId !== null) yield* deleteScheduledTask(bot.memoryTidyTaskId);
     if (bot.projectId !== null) {
       // Force deletes the Bot's thread with its project.
       yield* projects
@@ -528,6 +679,10 @@ const make = Effect.gen(function* () {
     }
     const nowMs = yield* Clock.currentTimeMillis;
     yield* io(trashFolder(root, bot.slug, nowMs)).pipe(Effect.mapError(storage("trash", bot.id)));
+    yield* Ref.update(
+      botsByThread,
+      (bots) => new Map([...bots].filter(([, entry]) => entry.id !== bot.id)),
+    );
     const settings = yield* readSettings();
     if (settings.mainBotId === bot.id) yield* writeSettings({ ...settings, mainBotId: null });
     yield* notifyChanged;
@@ -658,6 +813,9 @@ const make = Effect.gen(function* () {
     getInstructions,
     saveInstructions,
     saveSettings,
+    botForThread: Effect.fn("BotService.botForThread")(function* (threadId) {
+      return (yield* Ref.get(botsByThread)).get(threadId) ?? null;
+    }),
   });
 });
 

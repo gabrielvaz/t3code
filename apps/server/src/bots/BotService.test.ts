@@ -5,6 +5,9 @@ import {
   type OrchestrationV2ServerCommand,
   type Project,
   ProviderInstanceId,
+  type ScheduledTask,
+  ScheduledTaskId,
+  type ScheduledTaskUpsertInput,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -16,6 +19,7 @@ import * as ServerConfig from "../config.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
+import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { freeSlug, slugify } from "./BotFiles.ts";
 import { BOT_MEMORY_LIMITS, memorySnapshot, revisionOf } from "./BotMemory.ts";
@@ -81,7 +85,12 @@ const harness = () => {
     deleted: [] as Array<ProjectService.ProjectDeleteInput>,
     launched: [] as Array<ThreadLaunchService.ThreadLaunchInput>,
     dispatched: [] as Array<OrchestrationV2ServerCommand>,
+    upserts: [] as Array<ScheduledTaskUpsertInput>,
+    enabled: [] as Array<{ id: string; enabled: boolean }>,
+    deletedTasks: [] as Array<string>,
+    deletedForThread: [] as Array<ThreadId>,
   };
+  const tasks = new Map<string, ScheduledTask>();
   const layer = Bots.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -115,6 +124,32 @@ const harness = () => {
               calls.dispatched.push(command);
               return {} as never;
             }),
+        }),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({
+          list: () => Effect.sync(() => ({ tasks: [...tasks.values()] })),
+          upsert: (input) =>
+            Effect.sync(() => {
+              calls.upserts.push(input);
+              const task = {
+                ...input,
+                id: input.id ?? ScheduledTaskId.make(`task-${calls.upserts.length}`),
+                threadId: input.threadId ?? null,
+              } as unknown as ScheduledTask;
+              tasks.set(task.id, task);
+              return { task };
+            }),
+          setEnabled: (input) =>
+            Effect.sync(() => {
+              calls.enabled.push(input);
+              return { task: tasks.get(input.id)! };
+            }),
+          delete: (input) =>
+            Effect.sync(() => {
+              calls.deletedTasks.push(input.id);
+              return { id: input.id };
+            }),
+          deleteForThread: (threadId) =>
+            Effect.sync(() => void calls.deletedForThread.push(threadId)),
         }),
         ServerSettings.layerTest(),
       ),
@@ -225,14 +260,71 @@ describe("BotService", () => {
       const { stateDir } = yield* ServerConfig.ServerConfig;
       const { bot } = yield* bots.create({ name: "Temp", model });
 
+      yield* bots.update({ id: bot.id, memoryTidy: "daily" });
+      expect(yield* bots.botForThread(botThreadId)).toMatchObject({ id: bot.id });
+
       yield* bots.delete({ id: bot.id });
       expect(calls.deleted).toMatchObject([{ projectId: bot.projectId, force: true }]);
+      expect(calls.deletedForThread).toEqual([botThreadId]);
+      expect(calls.deletedTasks).toEqual(["task-1"]);
+      expect(yield* bots.botForThread(botThreadId)).toBeNull();
       expect(yield* fileSystem.exists(path.join(stateDir, "bots", "temp"))).toBe(false);
       const trashed = yield* fileSystem.readDirectory(path.join(stateDir, "bots", ".trash"));
       expect(trashed).toHaveLength(1);
       expect((yield* bots.list).bots).toEqual([]);
       const missing = yield* bots.delete({ id: bot.id }).pipe(Effect.flip);
       expect(missing._tag).toBe("BotNotFoundError");
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("keeps the thread in step with a renamed Bot and its new model", () => {
+    const { calls, layer } = harness();
+    return Effect.gen(function* () {
+      const bots = yield* Bots.BotService;
+      const { bot } = yield* bots.create({ name: "Ops", model });
+      const other = { instanceId: ProviderInstanceId.make("claude"), model: "claude-opus-5-5" };
+      yield* bots.update({ id: bot.id, name: "Ops Lead", model: other });
+      expect(calls.dispatched.slice(1)).toMatchObject([
+        { type: "thread.metadata.update", threadId: botThreadId, title: "Ops Lead" },
+        { type: "thread.model-selection.set", threadId: botThreadId, modelSelection: other },
+      ]);
+      expect(calls.updated.at(-1)).toMatchObject({ title: "Ops Lead" });
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("schedules memory tidy in its own thread, edits it, and pauses it when off", () => {
+    const { calls, layer } = harness();
+    return Effect.gen(function* () {
+      const bots = yield* Bots.BotService;
+      const { bot } = yield* bots.create({ name: "Tidy", model });
+
+      const daily = yield* bots.update({ id: bot.id, memoryTidy: "daily" });
+      expect(daily.bot.memoryTidyTaskId).toBe("task-1");
+      expect(calls.upserts[0]).toMatchObject({
+        title: Bots.MEMORY_TIDY_TITLE,
+        schedule: { type: "fixed_time", timeOfDay: "03:30" },
+        projectId: bot.projectId,
+        threadId: null,
+        threadMode: "fresh_session",
+        workspaceStrategy: { type: "root" },
+        modelSelection: model,
+        runtimeMode: "auto-accept-edits",
+        enabled: true,
+      });
+      expect(calls.upserts[0]?.schedule).not.toHaveProperty("weekdays");
+
+      const weekly = yield* bots.update({ id: bot.id, memoryTidy: "weekly" });
+      expect(weekly.bot.memoryTidyTaskId).toBe("task-1");
+      expect(calls.upserts[1]).toMatchObject({
+        id: "task-1",
+        requireExisting: true,
+        schedule: { type: "fixed_time", timeOfDay: "03:30", weekdays: [1] },
+      });
+
+      const off = yield* bots.update({ id: bot.id, memoryTidy: "off" });
+      expect(off.bot).toMatchObject({ memoryTidy: "off", memoryTidyTaskId: "task-1" });
+      expect(calls.enabled).toEqual([{ id: "task-1", enabled: false }]);
+      expect(calls.upserts).toHaveLength(2);
     }).pipe(Effect.provide(layer));
   });
 });

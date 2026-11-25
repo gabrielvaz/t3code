@@ -1,8 +1,10 @@
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import {
   ForwardCompatibleArray,
   IsoDateTime,
+  NonNegativeInt,
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
@@ -187,6 +189,147 @@ export type BotSaveSettingsInput = typeof BotSaveSettingsInput.Type;
 export const BotSaveSettingsResult = Schema.Struct({ settings: BotsSharedSettings });
 export type BotSaveSettingsResult = typeof BotSaveSettingsResult.Type;
 
+/** One Vault field; longer text is refused. */
+export const BOT_VAULT_FIELD_MAX_CHARS = 4_000;
+/** Websites, emails or phones on one item. */
+export const BOT_VAULT_LIST_MAX = 20;
+export const BOT_VAULT_MAX_ITEMS = 10_000;
+
+const VaultText = Schema.String.check(Schema.isMaxLength(BOT_VAULT_FIELD_MAX_CHARS));
+const VaultTextList = Schema.Array(VaultText).check(Schema.isMaxLength(BOT_VAULT_LIST_MAX));
+
+export const BotVaultItemId = TrimmedNonEmptyString.pipe(Schema.brand("BotVaultItemId"));
+export type BotVaultItemId = typeof BotVaultItemId.Type;
+
+export const BotVaultItemKind = Schema.Literals(["login", "contact"]);
+export type BotVaultItemKind = typeof BotVaultItemKind.Type;
+
+/** A login as clients and Bots see it: never the password. */
+export const BotVaultLoginSummary = Schema.Struct({
+  kind: Schema.Literal("login"),
+  id: BotVaultItemId,
+  title: Schema.String,
+  /** Where it fills: each site and its subdomains. Primary first. */
+  websites: Schema.Array(Schema.String),
+  username: Schema.String,
+  hints: Schema.String,
+  /** An API token or key Bots may read into a private file; other passwords are only typed into pages. */
+  botCanRead: Schema.Boolean,
+  hasPassword: Schema.Boolean,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type BotVaultLoginSummary = typeof BotVaultLoginSummary.Type;
+
+const contactFields = {
+  label: Schema.String,
+  name: Schema.String,
+  emails: Schema.Array(Schema.String),
+  phones: Schema.Array(Schema.String),
+  street: Schema.String,
+  apt: Schema.String,
+  city: Schema.String,
+  state: Schema.String,
+  zip: Schema.String,
+  country: Schema.String,
+};
+
+export const BotVaultContact = Schema.Struct({
+  kind: Schema.Literal("contact"),
+  id: BotVaultItemId,
+  ...contactFields,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type BotVaultContact = typeof BotVaultContact.Type;
+
+export const BotVaultListItem = Schema.Union([BotVaultLoginSummary, BotVaultContact]);
+export type BotVaultListItem = typeof BotVaultListItem.Type;
+
+export const BotVaultListInput = Schema.Struct({});
+export type BotVaultListInput = typeof BotVaultListInput.Type;
+
+export const BotVaultListResult = Schema.Struct({
+  items: ForwardCompatibleArray(BotVaultListItem),
+});
+export type BotVaultListResult = typeof BotVaultListResult.Type;
+
+export const BotVaultLoginInput = Schema.Struct({
+  kind: Schema.Literal("login"),
+  /** Omit to add a login. */
+  id: Schema.optional(BotVaultItemId),
+  title: Schema.optional(VaultText),
+  websites: Schema.optional(VaultTextList),
+  username: Schema.optional(VaultText),
+  /** Omit to keep the saved password. */
+  password: Schema.optional(VaultText),
+  hints: Schema.optional(VaultText),
+  botCanRead: Schema.optional(Schema.Boolean),
+});
+export type BotVaultLoginInput = typeof BotVaultLoginInput.Type;
+
+export const BotVaultContactInput = Schema.Struct({
+  kind: Schema.Literal("contact"),
+  id: Schema.optional(BotVaultItemId),
+  label: Schema.optional(VaultText),
+  name: Schema.optional(VaultText),
+  emails: Schema.optional(VaultTextList),
+  phones: Schema.optional(VaultTextList),
+  street: Schema.optional(VaultText),
+  apt: Schema.optional(VaultText),
+  city: Schema.optional(VaultText),
+  state: Schema.optional(VaultText),
+  zip: Schema.optional(VaultText),
+  country: Schema.optional(VaultText),
+});
+export type BotVaultContactInput = typeof BotVaultContactInput.Type;
+
+export const BotVaultUpsertInput = Schema.Union([BotVaultLoginInput, BotVaultContactInput]);
+export type BotVaultUpsertInput = typeof BotVaultUpsertInput.Type;
+
+export const BotVaultUpsertResult = Schema.Struct({ item: BotVaultListItem });
+export type BotVaultUpsertResult = typeof BotVaultUpsertResult.Type;
+
+export const BotVaultDeleteInput = Schema.Struct({ id: BotVaultItemId });
+export type BotVaultDeleteInput = typeof BotVaultDeleteInput.Type;
+
+export const BotVaultDeleteResult = Schema.Struct({ id: BotVaultItemId });
+export type BotVaultDeleteResult = typeof BotVaultDeleteResult.Type;
+
+export const BotVaultRevealInput = Schema.Struct({ id: BotVaultItemId });
+export type BotVaultRevealInput = typeof BotVaultRevealInput.Type;
+
+export const BotVaultRevealResult = Schema.Struct({ password: Schema.String });
+export type BotVaultRevealResult = typeof BotVaultRevealResult.Type;
+
+/** Rows a client parsed from a password manager's CSV export; the file never leaves the device. */
+export const BotVaultImportCsvInput = Schema.Struct({
+  items: Schema.Array(
+    Schema.Union([
+      BotVaultLoginInput.mapFields(Struct.omit(["id"])),
+      BotVaultContactInput.mapFields(Struct.omit(["id"])),
+    ]),
+  ).check(Schema.isMaxLength(BOT_VAULT_MAX_ITEMS)),
+});
+export type BotVaultImportCsvInput = typeof BotVaultImportCsvInput.Type;
+export type BotVaultImportItem = BotVaultImportCsvInput["items"][number];
+
+export const BotVaultImportCsvResult = Schema.Struct({
+  added: NonNegativeInt,
+  updated: NonNegativeInt,
+  skipped: NonNegativeInt,
+});
+export type BotVaultImportCsvResult = typeof BotVaultImportCsvResult.Type;
+
+export class BotVaultError extends Schema.TaggedError<BotVaultError>()("BotVaultError", {
+  reason: Schema.Literals(["locked", "damaged", "not-found", "invalid", "storage"]),
+  detail: Schema.String,
+}) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
 export class BotNotFoundError extends Schema.TaggedError<BotNotFoundError>()("BotNotFoundError", {
   id: BotId,
 }) {
@@ -217,6 +360,7 @@ export class BotStorageError extends Schema.TaggedError<BotStorageError>()("BotS
     "launch-thread",
     "configure-thread",
     "resolve-model",
+    "memory-tidy",
   ]),
   id: Schema.optional(BotId),
   cause: Schema.optional(Schema.Defect()),
@@ -240,5 +384,6 @@ export const BotError = Schema.Union([
   BotConflictError,
   BotStorageError,
   BotInvalidError,
+  BotVaultError,
 ]);
 export type BotError = typeof BotError.Type;

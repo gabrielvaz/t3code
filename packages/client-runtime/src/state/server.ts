@@ -1697,6 +1697,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:bots:instructions",
       tag: WS_METHODS.botsGetInstructions,
     }),
+    botVault: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:vault",
+      tag: WS_METHODS.botsVaultList,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan. With
     // nothing to show yet, the server's last scan answers first, then a plain
@@ -2002,6 +2006,28 @@ export function createServerEnvironmentAtoms<R, E>(
     saveBotSettings: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:bot:save-settings",
       tag: WS_METHODS.botsSaveSettings,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    upsertBotVaultItem: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:vault-upsert",
+      tag: WS_METHODS.botsVaultUpsert,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    deleteBotVaultItem: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:vault-delete",
+      tag: WS_METHODS.botsVaultDelete,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    revealBotVaultPassword: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:vault-reveal",
+      tag: WS_METHODS.botsVaultReveal,
+    }),
+    importBotVaultCsv: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:vault-import",
+      tag: WS_METHODS.botsVaultImportCsv,
       scheduler: configScheduler,
       concurrency: configConcurrency,
     }),

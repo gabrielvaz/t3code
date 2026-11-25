@@ -168,6 +168,8 @@ export interface McpInvocationScope {
   readonly origin?: string | undefined;
   /** False when the calling thread's project is on no forge T3 reads; `/mcp` reads it per request. */
   readonly forge?: boolean;
+  /** True when the calling thread is a Bot's main thread; `/mcp` asks BotService per request. */
+  readonly botThread?: boolean;
 }
 
 /**
@@ -241,6 +243,13 @@ export const hiddenWhileFeedbackOff = (): boolean => {
   const fiber = Fiber.getCurrent();
   const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
   return scope?.agentFeedback !== undefined && scope.agentFeedback !== "off";
+};
+
+/** `McpSchema.EnabledWhen` for the Bot tools: only a Bot's own main thread sees them. */
+export const hiddenUnlessBotThread = (): boolean => {
+  const fiber = Fiber.getCurrent();
+  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
+  return scope?.thread !== undefined && scope.botThread === true;
 };
 
 /** `McpSchema.EnabledWhen` for workflow event types: outside clients only, while Workflows is on. */

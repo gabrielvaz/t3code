@@ -33,6 +33,7 @@ import {
 import packageJson from "../../package.json" with { type: "json" };
 import { parseBearerToken } from "../auth/EnvironmentAuth.ts";
 import * as SessionStore from "../auth/SessionStore.ts";
+import * as BotService from "../bots/BotService.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as DeviceService from "../device/DeviceService.ts";
@@ -67,6 +68,8 @@ import { PreviewControlsToolkit } from "./toolkits/previewControls/tools.ts";
 import * as PreviewControlsHandlers from "./toolkits/previewControls/handlers.ts";
 import * as FeedbackHandlers from "./toolkits/feedback/handlers.ts";
 import { FeedbackToolkit } from "./toolkits/feedback/tools.ts";
+import * as BotsHandlers from "./toolkits/bots/handlers.ts";
+import { BotsToolkit } from "./toolkits/bots/tools.ts";
 import * as Feedback from "../feedback/FeedbackService.ts";
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
@@ -307,6 +310,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
   const pullRequests = yield* Effect.serviceOption(PullRequestService.PullRequestService);
   const projections = yield* Effect.serviceOption(ProjectionStore.ProjectionStoreV2);
   const sessions = yield* Effect.serviceOption(SessionStore.SessionStore);
+  const bots = yield* Effect.serviceOption(BotService.BotService);
   // Auth runs once per request, so a response that streams on ends when the outside client's
   // session is revoked or expires. `events/stream` ends itself first with
   // `notifications/events/terminated`, which cutting the body here would lose.
@@ -383,6 +387,10 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       limited.thread === undefined
         ? undefined
         : yield* Cache.get(forgeOfThread, limited.thread.threadId);
+    const botThread =
+      limited.thread !== undefined &&
+      Option.isSome(bots) &&
+      (yield* bots.value.botForThread(limited.thread.threadId)) !== null;
     return {
       ...limited,
       linkedEnvironments,
@@ -390,6 +398,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       workflows,
       origin,
       ...(forge === undefined ? {} : { forge }),
+      ...(botThread ? { botThread } : {}),
     };
   });
   // Untraced: a span here would wrap the tool call; the HTTP server span already covers it.
@@ -1486,6 +1495,8 @@ const layerFeedbackToolkit = toolkitRegistration(FeedbackToolkit, FeedbackHandle
   ),
 );
 
+const layerBotsToolkit = toolkitRegistration(BotsToolkit, BotsHandlers.layer);
+
 export const layerAttachmentToolkit = toolkitRegistration(
   AttachmentToolkit,
   AttachmentHandlers.layer,
@@ -1560,6 +1571,7 @@ export const layerTools = Layer.mergeAll(
   layerDeviceToolkit,
   layerHtmlToolkit,
   layerMessageToolkit,
+  layerBotsToolkit,
 );
 
 const layerToolExposure = Layer.effect(
