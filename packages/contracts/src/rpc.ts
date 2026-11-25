@@ -503,6 +503,18 @@ import {
   BotExecutorInstallInput,
   BotExecutorStatus,
   BotExecutorStatusInput,
+  BotRoomCreateInput,
+  BotRoomDeleteResult,
+  BotRoomIdInput,
+  BotRoomMutationResult,
+  BotRoomSendInput,
+  BotRoomSendResult,
+  BotRoomsSnapshot,
+  BotRoomsSubscribeInput,
+  BotRoomStopResult,
+  BotRoomTranscriptInput,
+  BotRoomTranscriptResult,
+  BotRoomUpdateInput,
 } from "./bots.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
@@ -732,6 +744,14 @@ export const WS_METHODS = {
   botsExecutorConnections: "bots.executorConnections",
   botsExecutorConnect: "bots.executorConnect",
   botsExecutorDisconnect: "bots.executorDisconnect",
+  botsRoomsSubscribe: "bots.roomsSubscribe",
+  botsRoomCreate: "bots.roomCreate",
+  botsRoomUpdate: "bots.roomUpdate",
+  botsRoomDelete: "bots.roomDelete",
+  botsRoomSend: "bots.roomSend",
+  botsRoomStop: "bots.roomStop",
+  botsRoomReset: "bots.roomReset",
+  botsRoomTranscript: "bots.roomTranscript",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -2691,6 +2711,55 @@ const WsBotsExecutorDisconnectRpc = Rpc.make(WS_METHODS.botsExecutorDisconnect, 
   error: WsBotError,
 });
 
+const WsBotsRoomsSubscribeRpc = Rpc.make(WS_METHODS.botsRoomsSubscribe, {
+  payload: BotRoomsSubscribeInput,
+  success: BotRoomsSnapshot,
+  error: WsBotError,
+  stream: true,
+});
+
+const WsBotsRoomCreateRpc = Rpc.make(WS_METHODS.botsRoomCreate, {
+  payload: BotRoomCreateInput,
+  success: BotRoomMutationResult,
+  error: WsBotError,
+});
+
+const WsBotsRoomUpdateRpc = Rpc.make(WS_METHODS.botsRoomUpdate, {
+  payload: BotRoomUpdateInput,
+  success: BotRoomMutationResult,
+  error: WsBotError,
+});
+
+const WsBotsRoomDeleteRpc = Rpc.make(WS_METHODS.botsRoomDelete, {
+  payload: BotRoomIdInput,
+  success: BotRoomDeleteResult,
+  error: WsBotError,
+});
+
+const WsBotsRoomSendRpc = Rpc.make(WS_METHODS.botsRoomSend, {
+  payload: BotRoomSendInput,
+  success: BotRoomSendResult,
+  error: WsBotError,
+});
+
+const WsBotsRoomStopRpc = Rpc.make(WS_METHODS.botsRoomStop, {
+  payload: BotRoomIdInput,
+  success: BotRoomStopResult,
+  error: WsBotError,
+});
+
+const WsBotsRoomResetRpc = Rpc.make(WS_METHODS.botsRoomReset, {
+  payload: BotRoomIdInput,
+  success: BotRoomMutationResult,
+  error: WsBotError,
+});
+
+const WsBotsRoomTranscriptRpc = Rpc.make(WS_METHODS.botsRoomTranscript, {
+  payload: BotRoomTranscriptInput,
+  success: BotRoomTranscriptResult,
+  error: WsBotError,
+});
+
 export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthorization>()(
   "t3/contracts/RpcScopeAuthorization",
   { error: EnvironmentAuthorizationError },
@@ -2821,6 +2890,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsBotsExecutorConnectionsRpc,
   WsBotsExecutorConnectRpc,
   WsBotsExecutorDisconnectRpc,
+  WsBotsRoomsSubscribeRpc,
+  WsBotsRoomCreateRpc,
+  WsBotsRoomUpdateRpc,
+  WsBotsRoomDeleteRpc,
+  WsBotsRoomSendRpc,
+  WsBotsRoomStopRpc,
+  WsBotsRoomResetRpc,
+  WsBotsRoomTranscriptRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,

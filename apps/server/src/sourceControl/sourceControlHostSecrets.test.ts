@@ -1,5 +1,10 @@
 import { assert, it } from "@effect/vitest";
-import { DeviceHostId, SecretProviderId, UsageLimitSourceId } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  DeviceHostId,
+  SecretProviderId,
+  UsageLimitSourceId,
+} from "@t3tools/contracts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Effect from "effect/Effect";
 
@@ -181,6 +186,7 @@ it.effect("reads a collected reference again once it is invalidated", () =>
         textGenerators: {},
         easDeviceHosts,
         simlockDeviceHosts,
+        botsExecutor: DEFAULT_SERVER_SETTINGS.botsExecutor,
       }),
     );
     assert.isFalse(cache.has("cliproxy#key"));

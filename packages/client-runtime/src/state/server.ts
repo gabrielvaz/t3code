@@ -1485,6 +1485,10 @@ export function createServerEnvironmentAtoms<R, E>(
         ),
       ),
   });
+  const botRoomsLive = createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+    label: "environment-data:server:bots:rooms",
+    tag: WS_METHODS.botsRoomsSubscribe,
+  });
   const liveWorkflowSnapshot = (environmentId: EnvironmentId) => {
     const live = workflowsLive({ environmentId, input: {} });
     return (get: Atom.AtomContext) => Option.getOrUndefined(AsyncResult.value(get(live)));
@@ -1711,6 +1715,21 @@ export function createServerEnvironmentAtoms<R, E>(
           Stream.scan(() => EMPTY_BOT_BOARD, applyBotBoardEvent),
           Stream.drop(1),
         ),
+    }),
+    botRoomsLive,
+    // The rooms subscription carries no messages; a room's revision says when to read them again.
+    botRoomTranscript: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:room-transcript",
+      tag: WS_METHODS.botsRoomTranscript,
+      refreshTrigger: ({ environmentId, input }) => {
+        const live = botRoomsLive({ environmentId, input: {} });
+        return Atom.make(
+          (get) =>
+            Option.getOrUndefined(AsyncResult.value(get(live)))?.statuses.find(
+              (status) => status.roomId === input.id,
+            )?.revision,
+        );
+      },
     }),
     botExecutorStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:bots:executor-status",
@@ -2071,6 +2090,30 @@ export function createServerEnvironmentAtoms<R, E>(
     disconnectBotExecutorApp: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:bot:executor-disconnect",
       tag: WS_METHODS.botsExecutorDisconnect,
+    }),
+    createBotRoom: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:room-create",
+      tag: WS_METHODS.botsRoomCreate,
+    }),
+    updateBotRoom: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:room-update",
+      tag: WS_METHODS.botsRoomUpdate,
+    }),
+    deleteBotRoom: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:room-delete",
+      tag: WS_METHODS.botsRoomDelete,
+    }),
+    sendBotRoomMessage: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:room-send",
+      tag: WS_METHODS.botsRoomSend,
+    }),
+    stopBotRoom: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:room-stop",
+      tag: WS_METHODS.botsRoomStop,
+    }),
+    resetBotRoom: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:room-reset",
+      tag: WS_METHODS.botsRoomReset,
     }),
     importBotVaultCsv: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:bot:vault-import",

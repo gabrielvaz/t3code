@@ -7,6 +7,7 @@ import {
   IsoDateTime,
   NonNegativeInt,
   ProjectId,
+  RunId,
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
@@ -680,6 +681,7 @@ export class BotStorageError extends Schema.TaggedError<BotStorageError>()("BotS
     "configure-thread",
     "resolve-model",
     "memory-tidy",
+    "rooms",
   ]),
   id: Schema.optional(BotId),
   cause: Schema.optional(Schema.Defect()),
@@ -698,8 +700,18 @@ export class BotInvalidError extends Schema.TaggedError<BotInvalidError>()("BotI
   }
 }
 
+export class BotRoomNotFoundError extends Schema.TaggedError<BotRoomNotFoundError>()(
+  "BotRoomNotFoundError",
+  { id: Schema.String },
+) {
+  override get message(): string {
+    return `Room ${this.id} was not found.`;
+  }
+}
+
 export const BotError = Schema.Union([
   BotNotFoundError,
+  BotRoomNotFoundError,
   BotConflictError,
   BotStorageError,
   BotInvalidError,
@@ -708,3 +720,246 @@ export const BotError = Schema.Union([
   BotExecutorError,
 ]);
 export type BotError = typeof BotError.Type;
+
+// Rooms: group chats between the user and 2–8 Bots. Each member answers in its own T3 thread;
+// the server keeps membership, settings and the user's messages, never the Bots' replies.
+
+export const BOT_ROOM_MIN_MEMBERS = 2;
+export const BOT_ROOM_MAX_MEMBERS = 8;
+export const BOT_ROOM_NAME_MAX_CHARS = 60;
+export const BOT_ROOM_DESCRIPTION_MAX_CHARS = 200;
+/** A room message is relayed to every addressed member; cap what one paste can cost. */
+export const BOT_ROOM_MESSAGE_MAX_CHARS = 20_000;
+export const BOT_ROOM_TRANSCRIPT_MAX_TURNS = 200;
+
+export const BotRoomId = TrimmedNonEmptyString.pipe(Schema.brand("BotRoomId"));
+export type BotRoomId = typeof BotRoomId.Type;
+
+export const BotRoomMode = Schema.Literals(["panel", "roundtable"]);
+export type BotRoomMode = typeof BotRoomMode.Type;
+
+/** Who answers a message that names nobody. */
+export const BotRoomResponder = Schema.Literals(["lead", "everyone", "mentions"]);
+export type BotRoomResponder = typeof BotRoomResponder.Type;
+
+const boundedInt = (min: number, max: number) =>
+  Schema.Int.check(Schema.isGreaterThanOrEqualTo(min), Schema.isLessThanOrEqualTo(max));
+
+export const BotRoomSettings = Schema.Struct({
+  mode: BotRoomMode,
+  defaultResponder: BotRoomResponder,
+  /** The member that answers when nobody is named and the responder is `lead`. */
+  lead: Schema.NullOr(BotId),
+  /** Roundtable only: a reply that @mentions a teammate brings it back in. */
+  allowCrossMentions: Schema.Boolean,
+  maxWaves: boundedInt(1, 5),
+  maxReplies: boundedInt(1, 20),
+  memberTimeoutMin: boundedInt(1, 60),
+  turnDeadlineMin: boundedInt(1, 120),
+});
+export type BotRoomSettings = typeof BotRoomSettings.Type;
+
+export const BotRoomSettingsPatch = Schema.Struct({
+  mode: Schema.optional(BotRoomMode),
+  defaultResponder: Schema.optional(BotRoomResponder),
+  lead: Schema.optional(Schema.NullOr(BotId)),
+  allowCrossMentions: Schema.optional(Schema.Boolean),
+  maxWaves: Schema.optional(boundedInt(1, 5)),
+  maxReplies: Schema.optional(boundedInt(1, 20)),
+  memberTimeoutMin: Schema.optional(boundedInt(1, 60)),
+  turnDeadlineMin: Schema.optional(boundedInt(1, 120)),
+});
+export type BotRoomSettingsPatch = typeof BotRoomSettingsPatch.Type;
+
+export const BotRoomMember = Schema.Struct({
+  botId: BotId,
+  /** Null until the member's room thread is launched. */
+  threadId: Schema.NullOr(ThreadId),
+  /** When the room last heard from this member; its next prompt shows lines after it. */
+  lastTurnAt: Schema.NullOr(IsoDateTime),
+  addedAt: IsoDateTime,
+  /** After a reset: the member's next message opens a new provider session. */
+  fresh: Schema.optional(Schema.Boolean),
+});
+export type BotRoomMember = typeof BotRoomMember.Type;
+
+export const BotRoomRunStatus = Schema.Literals([
+  "replied",
+  "passed",
+  "no-reply",
+  "failed",
+  "timeout",
+  "stopped",
+]);
+export type BotRoomRunStatus = typeof BotRoomRunStatus.Type;
+
+/** One time a member was asked to speak in a turn; a roundtable can ask a member again. */
+export const BotRoomRun = Schema.Struct({
+  botId: BotId,
+  runId: Schema.NullOr(RunId),
+  /** The run holding the member's final answer, when delegated work woke it again. */
+  resultRunId: Schema.optional(RunId),
+  status: Schema.optional(BotRoomRunStatus),
+  error: Schema.optional(Schema.String),
+  at: Schema.optional(IsoDateTime),
+});
+export type BotRoomRun = typeof BotRoomRun.Type;
+
+export const BotRoomTurnStatus = Schema.Literals([
+  "queued",
+  "running",
+  "done",
+  "stopped",
+  "interrupted",
+  "failed",
+]);
+export type BotRoomTurnStatus = typeof BotRoomTurnStatus.Type;
+
+/** A user message and what the room did with it. */
+export const BotRoomTurn = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  at: IsoDateTime,
+  text: Schema.String,
+  /** Bot ids the composer resolved, or "all". */
+  mentions: Schema.Array(Schema.String),
+  status: BotRoomTurnStatus,
+  runs: Schema.Array(BotRoomRun),
+});
+export type BotRoomTurn = typeof BotRoomTurn.Type;
+
+/** `bots/.shared/rooms.json`, one entry per room. */
+export const BotRoomRecord = Schema.Struct({
+  id: BotRoomId,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(BOT_ROOM_NAME_MAX_CHARS)),
+  description: Schema.String,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  settings: BotRoomSettings,
+  members: Schema.Array(BotRoomMember),
+  /** Removed members; their threads stay as read-only history and are never addressed. */
+  formerMembers: Schema.Array(BotRoomMember),
+  turns: Schema.Array(BotRoomTurn),
+});
+export type BotRoomRecord = typeof BotRoomRecord.Type;
+
+/** A room as the list shows it: no messages, so the subscription stays small. */
+export const BotRoom = Schema.Struct({
+  id: BotRoomId,
+  name: Schema.String,
+  description: Schema.String,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  settings: BotRoomSettings,
+  members: Schema.Array(BotRoomMember),
+  formerMembers: Schema.Array(BotRoomMember),
+  lastMessageAt: Schema.NullOr(IsoDateTime),
+});
+export type BotRoom = typeof BotRoom.Type;
+
+export const BotRoomMemberState = Schema.Literals([
+  "waiting",
+  "thinking",
+  "replied",
+  "passed",
+  "no-reply",
+  "timeout",
+  "failed",
+  "stopped",
+]);
+export type BotRoomMemberState = typeof BotRoomMemberState.Type;
+
+export const BotRoomStatus = Schema.Struct({
+  roomId: BotRoomId,
+  /** The turn in flight, if any. */
+  turnId: Schema.NullOr(Schema.String),
+  queued: NonNegativeInt,
+  /** How each member is doing in the turn in flight, or how it ended the last one. */
+  members: Schema.Array(Schema.Struct({ botId: BotId, state: BotRoomMemberState })),
+  /** Grows whenever the transcript may read differently; clients refetch on change. */
+  revision: NonNegativeInt,
+});
+export type BotRoomStatus = typeof BotRoomStatus.Type;
+
+export const BotRoomsSubscribeInput = Schema.Struct({});
+export type BotRoomsSubscribeInput = typeof BotRoomsSubscribeInput.Type;
+
+export const BotRoomsSnapshot = Schema.Struct({
+  rooms: ForwardCompatibleArray(BotRoom),
+  statuses: Schema.Array(BotRoomStatus),
+});
+export type BotRoomsSnapshot = typeof BotRoomsSnapshot.Type;
+
+const RoomName = TrimmedNonEmptyString.check(Schema.isMaxLength(BOT_ROOM_NAME_MAX_CHARS));
+const RoomDescription = Schema.String.check(Schema.isMaxLength(BOT_ROOM_DESCRIPTION_MAX_CHARS));
+const RoomMemberIds = Schema.Array(BotId).check(
+  Schema.isMinLength(BOT_ROOM_MIN_MEMBERS),
+  Schema.isMaxLength(BOT_ROOM_MAX_MEMBERS),
+);
+
+export const BotRoomCreateInput = Schema.Struct({
+  name: RoomName,
+  description: Schema.optional(RoomDescription),
+  memberIds: RoomMemberIds,
+  settings: Schema.optional(BotRoomSettingsPatch),
+});
+export type BotRoomCreateInput = typeof BotRoomCreateInput.Type;
+
+export const BotRoomUpdateInput = Schema.Struct({
+  id: BotRoomId,
+  name: Schema.optional(RoomName),
+  description: Schema.optional(RoomDescription),
+  memberIds: Schema.optional(RoomMemberIds),
+  settings: Schema.optional(BotRoomSettingsPatch),
+});
+export type BotRoomUpdateInput = typeof BotRoomUpdateInput.Type;
+
+export const BotRoomMutationResult = Schema.Struct({ room: BotRoom });
+export type BotRoomMutationResult = typeof BotRoomMutationResult.Type;
+
+export const BotRoomIdInput = Schema.Struct({ id: BotRoomId });
+export type BotRoomIdInput = typeof BotRoomIdInput.Type;
+
+export const BotRoomDeleteResult = Schema.Struct({ id: BotRoomId });
+export type BotRoomDeleteResult = typeof BotRoomDeleteResult.Type;
+
+export const BotRoomSendInput = Schema.Struct({
+  id: BotRoomId,
+  text: TrimmedNonEmptyString.check(Schema.isMaxLength(BOT_ROOM_MESSAGE_MAX_CHARS)),
+  /** Bot ids (or "all") the composer resolved; omit to parse `@Name` from the text. */
+  mentions: Schema.optional(Schema.Array(Schema.String).check(Schema.isMaxLength(16))),
+});
+export type BotRoomSendInput = typeof BotRoomSendInput.Type;
+
+export const BotRoomSendResult = Schema.Struct({
+  turnId: Schema.String,
+  /** True when the message waits behind a turn in flight. */
+  queued: Schema.Boolean,
+});
+export type BotRoomSendResult = typeof BotRoomSendResult.Type;
+
+export const BotRoomStopResult = Schema.Struct({ stopped: Schema.Boolean });
+export type BotRoomStopResult = typeof BotRoomStopResult.Type;
+
+export const BotRoomTranscriptInput = Schema.Struct({
+  id: BotRoomId,
+  /** The newest turns to read; defaults to 50. */
+  limit: Schema.optional(boundedInt(1, BOT_ROOM_TRANSCRIPT_MAX_TURNS)),
+});
+export type BotRoomTranscriptInput = typeof BotRoomTranscriptInput.Type;
+
+export const BotRoomTranscriptEntry = Schema.Struct({
+  id: Schema.String,
+  turnId: Schema.String,
+  at: IsoDateTime,
+  /** Absent for the user's own messages. */
+  botId: Schema.optional(BotId),
+  text: Schema.String,
+});
+export type BotRoomTranscriptEntry = typeof BotRoomTranscriptEntry.Type;
+
+export const BotRoomTranscriptResult = Schema.Struct({
+  entries: Schema.Array(BotRoomTranscriptEntry),
+  /** Older turns exist past `limit`. */
+  truncated: Schema.Boolean,
+});
+export type BotRoomTranscriptResult = typeof BotRoomTranscriptResult.Type;

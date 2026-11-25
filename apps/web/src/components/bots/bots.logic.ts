@@ -2,6 +2,7 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import type { BotConflictError, EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 import type { EnvironmentBot } from "../../state/bots";
+import type { EnvironmentBotRoom } from "../../state/botRooms";
 
 /** Pinned Bots first, then the saved order, then the oldest. */
 export function sortBotsForSidebar(
@@ -23,6 +24,22 @@ export function botThreadKeys(bots: ReadonlyArray<EnvironmentBot>): ReadonlySet<
       keys.add(scopedThreadKey(scopeThreadRef(environmentId, bot.threadId)));
   }
   return keys;
+}
+
+/** Room member threads belong to their room, so the shelves leave them out too. */
+export function withRoomThreadKeys(
+  keys: ReadonlySet<string>,
+  rooms: ReadonlyArray<EnvironmentBotRoom>,
+): ReadonlySet<string> {
+  if (rooms.length === 0) return keys;
+  const all = new Set(keys);
+  for (const { environmentId, room } of rooms) {
+    for (const member of [...room.members, ...room.formerMembers]) {
+      if (member.threadId !== null)
+        all.add(scopedThreadKey(scopeThreadRef(environmentId, member.threadId)));
+    }
+  }
+  return all;
 }
 
 /** Bot threads live in the sidebar's Bots section, so the shelves leave them out. */

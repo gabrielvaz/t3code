@@ -2,15 +2,16 @@ import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import type { ContextMenuSource, ScopedThreadRef } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
-import { useGT } from "gt-react";
-import { LayoutListIcon, PinIcon, PlusIcon } from "lucide-react";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { T, useGT } from "gt-react";
+import { BotIcon, LayoutListIcon, MessagesSquareIcon, PinIcon, PlusIcon } from "lucide-react";
 import { memo, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
 
 import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
 import { readLocalApi } from "../../localApi";
 import { cn } from "~/lib/utils";
 import { openNewBotDialog, type EnvironmentBot } from "../../state/bots";
+import { openNewBotRoomDialog, type EnvironmentBotRoom } from "../../state/botRooms";
 import { useThreadShell } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useUiStateStore } from "../../uiStateStore";
@@ -23,7 +24,9 @@ import {
   resolveSidebarRowStatus,
   resolveThreadLastVisitedAt,
 } from "../Sidebar.logic";
+import { BotRoomAvatars } from "../bots/BotRoomAvatars";
 import { Button } from "../ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { TopStatusIcon, useSidebarTopStatus } from "./SidebarThreadRow";
 
@@ -120,9 +123,61 @@ const SidebarBotRow = memo(function SidebarBotRow(props: {
   );
 });
 
+const SidebarRoomRow = memo(function SidebarRoomRow(props: {
+  entry: EnvironmentBotRoom;
+  bots: ReadonlyArray<EnvironmentBot>;
+  isActive: boolean;
+  onOpen: (entry: EnvironmentBotRoom) => void;
+}) {
+  const { entry, isActive, onOpen } = props;
+  const gt = useGT();
+  const busy = entry.status?.turnId != null;
+  const members = entry.room.members.flatMap(
+    (member) =>
+      props.bots.find(
+        (bot) => bot.environmentId === entry.environmentId && bot.bot.id === member.botId,
+      )?.bot ?? [],
+  );
+  return (
+    <li className="list-none">
+      <div
+        role="button"
+        tabIndex={0}
+        data-testid="sidebar-bot-room-row"
+        aria-current={isActive ? "page" : undefined}
+        aria-label={
+          busy ? gt("#{name}, replying", { name: entry.room.name }) : `#${entry.room.name}`
+        }
+        className={cn(
+          "group/sidebar-row relative flex h-9 w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-md px-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          isActive
+            ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
+            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+        )}
+        onClick={() => onOpen(entry)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen(entry);
+          }
+        }}
+      >
+        <BotRoomAvatars bots={members} size="sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">#{entry.room.name}</span>
+        {busy ? (
+          <span className="shrink-0 text-xs font-medium text-sidebar-muted-foreground">
+            {gt("Replying", { $context: "a room's Bots are answering" })}
+          </span>
+        ) : null}
+      </div>
+    </li>
+  );
+});
+
 /** The Bots section at the top of the thread list, shown once an environment has a Bot. */
 export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
   bots: ReadonlyArray<EnvironmentBot>;
+  rooms: ReadonlyArray<EnvironmentBotRoom>;
   routeRowThreadKey: string | null;
   revealRef: RevealRef;
   onNavigate: (threadRef: ScopedThreadRef) => void;
@@ -134,7 +189,10 @@ export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
     serverEnvironment.createBot.permissionAtom(props.bots[0]?.environmentId ?? null),
   );
   const boardOn = useBoardEnvironmentIds().length > 0;
+  const { roomId: activeRoomId } = useParams({ strict: false });
   if (props.bots.length === 0) return null;
+  const openRoom = (entry: EnvironmentBotRoom) =>
+    void navigate({ to: "/bots/rooms/$roomId", params: { roomId: entry.room.id } });
 
   const showContextMenu = (
     entry: EnvironmentBot,
@@ -199,20 +257,35 @@ export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
             <LayoutListIcon />
           </SharedTooltipTrigger>
         ) : null}
-        <SharedTooltipTrigger
-          render={
-            <Button
-              size="icon-micro"
-              variant="ghost-muted"
-              aria-label={gt("New Bot")}
-              disabled={!canCreate}
-              onClick={openNewBotDialog}
-            />
-          }
-          label={gt("New Bot")}
-        >
-          <PlusIcon />
-        </SharedTooltipTrigger>
+        <Menu>
+          <SharedTooltipTrigger
+            render={
+              <MenuTrigger
+                render={
+                  <Button
+                    size="icon-micro"
+                    variant="ghost-muted"
+                    aria-label={gt("New Bot or room")}
+                    disabled={!canCreate}
+                  />
+                }
+              />
+            }
+            label={gt("New Bot or room")}
+          >
+            <PlusIcon />
+          </SharedTooltipTrigger>
+          <MenuPopup side="bottom" align="end">
+            <MenuItem onClick={openNewBotDialog}>
+              <BotIcon />
+              <T>New Bot</T>
+            </MenuItem>
+            <MenuItem onClick={openNewBotRoomDialog}>
+              <MessagesSquareIcon />
+              <T>New room</T>
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </li>
       {props.bots.map((entry) => {
         const rowKey =
@@ -231,6 +304,20 @@ export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
           />
         );
       })}
+      {props.rooms.length > 0 ? (
+        <li className="flex h-7 list-none items-center ps-2.5 text-2xs font-medium text-sidebar-muted-foreground">
+          {gt("Rooms", { $context: "sidebar group of Bot group chats" })}
+        </li>
+      ) : null}
+      {props.rooms.map((entry) => (
+        <SidebarRoomRow
+          key={`${entry.environmentId}:${entry.room.id}`}
+          entry={entry}
+          bots={props.bots}
+          isActive={entry.room.id === activeRoomId}
+          onOpen={openRoom}
+        />
+      ))}
       <li aria-hidden className="mx-2.5 my-1.5 h-px list-none bg-sidebar-border/60" />
     </>
   );

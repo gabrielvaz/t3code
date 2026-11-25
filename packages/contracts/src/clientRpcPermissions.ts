@@ -99,6 +99,12 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.botsVaultReveal]: AuthSettingsWriteScope,
   [WS_METHODS.botsBoardSave]: AuthOrchestrationOperateScope,
   [WS_METHODS.botsBoardDelete]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsRoomCreate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsRoomUpdate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsRoomDelete]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsRoomSend]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsRoomStop]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsRoomReset]: AuthOrchestrationOperateScope,
   // Executor holds the user's app accounts; changing them is a settings change.
   [WS_METHODS.botsExecutorInstall]: AuthSettingsWriteScope,
   [WS_METHODS.botsExecutorConnect]: AuthSettingsWriteScope,

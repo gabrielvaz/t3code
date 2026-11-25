@@ -141,6 +141,7 @@ import * as Bots from "./bots/BotService.ts";
 import * as BotVault from "./bots/BotVault.ts";
 import * as BotProjectsBoard from "./bots/BotProjectsBoard.ts";
 import * as BotExecutor from "./bots/BotExecutor.ts";
+import * as BotRooms from "./bots/BotRooms.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -901,6 +902,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(BotVault.BotVault)({}),
   Layer.mock(BotProjectsBoard.BotProjectsBoard)({}),
   Layer.mock(BotExecutor.BotExecutor)({}),
+  Layer.mock(BotRooms.BotRooms)({}),
   Workflows.layerDisabled,
   Layer.mock(WorkflowRuntime.WorkflowDefinitions)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),

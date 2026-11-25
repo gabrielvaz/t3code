@@ -57,6 +57,7 @@ import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draf
 import { Route as ChatBotsBoardRouteImport } from './routes/_chat.bots.board'
 import { Route as ChatBotsBotIdRouteImport } from './routes/_chat.bots.$botId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
+import { Route as ChatBotsRoomsRoomIdRouteImport } from './routes/_chat.bots.rooms.$roomId'
 import { Route as ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRouteImport } from './routes/_chat.linked.$viaEnvironmentId.$linkedEnvironmentId.$linkedThreadId'
 
 const WelcomeRoute = WelcomeRouteImport.update({
@@ -304,6 +305,11 @@ const ChatEnvironmentIdThreadIdRoute =
     path: '/$environmentId/$threadId',
     getParentRoute: () => ChatRoute,
   } as any)
+const ChatBotsRoomsRoomIdRoute = ChatBotsRoomsRoomIdRouteImport.update({
+  id: '/bots/rooms/$roomId',
+  path: '/bots/rooms/$roomId',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute =
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRouteImport.update(
     {
@@ -361,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/settings/voice': typeof ChatSettingsVoiceRoute
   '/settings/worktrees': typeof ChatSettingsWorktreesRoute
   '/threads/$environmentId/$threadId': typeof ThreadsEnvironmentIdThreadIdRoute
+  '/bots/rooms/$roomId': typeof ChatBotsRoomsRoomIdRoute
   '/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId': typeof ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute
 }
 export interface FileRoutesByTo {
@@ -411,6 +418,7 @@ export interface FileRoutesByTo {
   '/settings/voice': typeof ChatSettingsVoiceRoute
   '/settings/worktrees': typeof ChatSettingsWorktreesRoute
   '/threads/$environmentId/$threadId': typeof ThreadsEnvironmentIdThreadIdRoute
+  '/bots/rooms/$roomId': typeof ChatBotsRoomsRoomIdRoute
   '/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId': typeof ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute
 }
 export interface FileRoutesById {
@@ -463,6 +471,7 @@ export interface FileRoutesById {
   '/_chat/settings/voice': typeof ChatSettingsVoiceRoute
   '/_chat/settings/worktrees': typeof ChatSettingsWorktreesRoute
   '/threads/$environmentId/$threadId': typeof ThreadsEnvironmentIdThreadIdRoute
+  '/_chat/bots/rooms/$roomId': typeof ChatBotsRoomsRoomIdRoute
   '/_chat/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId': typeof ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute
 }
 export interface FileRouteTypes {
@@ -515,6 +524,7 @@ export interface FileRouteTypes {
     | '/settings/voice'
     | '/settings/worktrees'
     | '/threads/$environmentId/$threadId'
+    | '/bots/rooms/$roomId'
     | '/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -565,6 +575,7 @@ export interface FileRouteTypes {
     | '/settings/voice'
     | '/settings/worktrees'
     | '/threads/$environmentId/$threadId'
+    | '/bots/rooms/$roomId'
     | '/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId'
   id:
     | '__root__'
@@ -616,6 +627,7 @@ export interface FileRouteTypes {
     | '/_chat/settings/voice'
     | '/_chat/settings/worktrees'
     | '/threads/$environmentId/$threadId'
+    | '/_chat/bots/rooms/$roomId'
     | '/_chat/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId'
   fileRoutesById: FileRoutesById
 }
@@ -969,6 +981,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatEnvironmentIdThreadIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/bots/rooms/$roomId': {
+      id: '/_chat/bots/rooms/$roomId'
+      path: '/bots/rooms/$roomId'
+      fullPath: '/bots/rooms/$roomId'
+      preLoaderRoute: typeof ChatBotsRoomsRoomIdRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId': {
       id: '/_chat/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId'
       path: '/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId'
@@ -1057,6 +1076,7 @@ interface ChatRouteChildren {
   ChatBotsBotIdRoute: typeof ChatBotsBotIdRoute
   ChatBotsBoardRoute: typeof ChatBotsBoardRoute
   ChatDraftDraftIdRoute: typeof ChatDraftDraftIdRoute
+  ChatBotsRoomsRoomIdRoute: typeof ChatBotsRoomsRoomIdRoute
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute: typeof ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute
 }
 
@@ -1072,6 +1092,7 @@ const ChatRouteChildren: ChatRouteChildren = {
   ChatBotsBotIdRoute: ChatBotsBotIdRoute,
   ChatBotsBoardRoute: ChatBotsBoardRoute,
   ChatDraftDraftIdRoute: ChatDraftDraftIdRoute,
+  ChatBotsRoomsRoomIdRoute: ChatBotsRoomsRoomIdRoute,
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute:
     ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute,
 }

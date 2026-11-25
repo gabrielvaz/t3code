@@ -139,6 +139,7 @@ import * as Bots from "./bots/BotService.ts";
 import * as BotVault from "./bots/BotVault.ts";
 import * as BotProjectsBoard from "./bots/BotProjectsBoard.ts";
 import * as BotExecutor from "./bots/BotExecutor.ts";
+import * as BotRooms from "./bots/BotRooms.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -1518,6 +1519,7 @@ export const layerWsRpc = (
       const botVault = yield* BotVault.BotVault;
       const botBoard = yield* BotProjectsBoard.BotProjectsBoard;
       const botExecutor = yield* BotExecutor.BotExecutor;
+      const botRooms = yield* BotRooms.BotRooms;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2499,6 +2501,19 @@ export const layerWsRpc = (
         [WS_METHODS.botsExecutorConnect]: (input) => botExecutor.connect(input),
         [WS_METHODS.botsExecutorDisconnect]: (input) =>
           botExecutor.disconnect(input).pipe(Effect.map((app) => ({ app }))),
+        [WS_METHODS.botsRoomsSubscribe]: (_input) => botRooms.subscribe(),
+        [WS_METHODS.botsRoomCreate]: (input) =>
+          botRooms.create(input).pipe(Effect.map((room) => ({ room }))),
+        [WS_METHODS.botsRoomUpdate]: (input) =>
+          botRooms.update(input).pipe(Effect.map((room) => ({ room }))),
+        [WS_METHODS.botsRoomDelete]: (input) =>
+          botRooms.delete(input.id).pipe(Effect.map((id) => ({ id }))),
+        [WS_METHODS.botsRoomSend]: (input) => botRooms.send(input),
+        [WS_METHODS.botsRoomStop]: (input) =>
+          botRooms.stop(input.id).pipe(Effect.map((stopped) => ({ stopped }))),
+        [WS_METHODS.botsRoomReset]: (input) =>
+          botRooms.reset(input.id).pipe(Effect.map((room) => ({ room }))),
+        [WS_METHODS.botsRoomTranscript]: (input) => botRooms.transcript(input),
         [WS_METHODS.guestShareCreate]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(guestShares.create(input)),

@@ -35,6 +35,10 @@
       "types": "./src/composerPullRequestMatches.ts",
       "import": "./src/composerPullRequestMatches.ts"
     },
+    "./botMentions": {
+      "types": "./src/botMentions.ts",
+      "import": "./src/botMentions.ts"
+    },
     "./botAvatar": {
       "types": "./src/botAvatar.ts",
       "import": "./src/botAvatar.ts"

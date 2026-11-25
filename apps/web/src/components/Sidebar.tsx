@@ -285,8 +285,14 @@ import {
   sidebarFolderRowId,
 } from "./sidebar/SidebarProjectFolderHeader";
 import { SidebarBotsBlock } from "./sidebar/SidebarBotsBlock";
-import { botThreadKeys, sortBotsForSidebar, withoutBotThreads } from "./bots/bots.logic";
+import {
+  botThreadKeys,
+  sortBotsForSidebar,
+  withoutBotThreads,
+  withRoomThreadKeys,
+} from "./bots/bots.logic";
 import { useEnvironmentBots } from "../state/bots";
+import { useEnvironmentBotRooms } from "../state/botRooms";
 import {
   SidebarDragBoundary,
   SidebarSectionHeader,
@@ -1134,7 +1140,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const threads = useQuietThreadShells();
   const { bots: environmentBots } = useEnvironmentBots();
   const sidebarBots = sortBotsForSidebar(environmentBots);
-  const shelfThreads = withoutBotThreads(threads, botThreadKeys(environmentBots));
+  const botRooms = useEnvironmentBotRooms();
+  const shelfThreads = withoutBotThreads(
+    threads,
+    withRoomThreadKeys(botThreadKeys(environmentBots), botRooms),
+  );
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
@@ -3617,6 +3627,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       <SidebarBotsBlock
                         key="bots"
                         bots={sidebarBots}
+                        rooms={botRooms}
                         routeRowThreadKey={routeRowThreadKey}
                         revealRef={revealActiveRow}
                         onNavigate={navigateToThread}

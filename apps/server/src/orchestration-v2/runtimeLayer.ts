@@ -68,6 +68,7 @@ import * as BotService from "../bots/BotService.ts";
 import * as BotVault from "../bots/BotVault.ts";
 import * as BotProjectsBoard from "../bots/BotProjectsBoard.ts";
 import * as BotExecutor from "../bots/BotExecutor.ts";
+import * as BotRooms from "../bots/BotRooms.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as FeedbackStore from "../feedback/FeedbackStore.ts";
 import * as WorkspaceFolders from "../workspace/WorkspaceFolders.ts";
@@ -360,6 +361,15 @@ const layerBotServiceProvided = BotService.layer.pipe(
   ),
   Layer.provideMerge(BotExecutor.layer),
 );
+const layerBotRoomsProvided = BotRooms.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerThreadLaunchProvided,
+      layerThreadManagementProvided,
+      layerBotServiceProvided,
+    ),
+  ),
+);
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -458,6 +468,7 @@ export const layerProduction = Layer.mergeAll(
   layerBotServiceProvided,
   BotVault.layer,
   BotProjectsBoard.layer,
+  layerBotRoomsProvided,
   layerWorkflowsProvided,
   layerScratchThreadPromotionProvided,
   layerSecretRequestsProvided,
