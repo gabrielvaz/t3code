@@ -124,6 +124,7 @@ export const invalidateSettingsSecrets = Effect.fn("SettingsSecrets.invalidate")
       | "easDeviceHosts"
       | "simlockDeviceHosts"
       | "cloudSpeechCredentials"
+      | "botsExecutor"
     >,
     E
   >,
@@ -137,6 +138,7 @@ export const invalidateSettingsSecrets = Effect.fn("SettingsSecrets.invalidate")
       ),
       ...collectDeviceHostSecretReferences(current),
       ...Object.values(current.cloudSpeechCredentials).filter(isSecretReference),
+      ...(isSecretReference(current.botsExecutor.token) ? [current.botsExecutor.token] : []),
     ]),
     Effect.orElseSucceed(() => undefined),
   );

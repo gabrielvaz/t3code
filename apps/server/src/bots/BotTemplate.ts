@@ -18,6 +18,17 @@ interface BotTemplateInput {
   readonly sharedMemoryFile: string;
   /** The rendered `<memory>` block, or empty. */
   readonly memoryBlock: string;
+  /** Labs › Projects board is on. */
+  readonly projectsBoard?: boolean;
+  /** How the Bot reaches connected apps, when Executor is set up. */
+  readonly executor?: TemplateExecutor | null;
+}
+
+export interface TemplateExecutor {
+  readonly kind: "self-hosted" | "cloud";
+  readonly organization: string;
+  readonly publicUrl: string;
+  readonly skippedApps: ReadonlyArray<string>;
 }
 
 const list = (rules: ReadonlyArray<string>) =>
@@ -73,8 +84,7 @@ ${input.memoryBlock ? `\n${input.memoryBlock}\n` : ""}
 - To park a thread for later, use \`t3_thread_organize\` with action \`snooze\` and \`snoozedUntil\` as an ISO 8601 time, reading times like "tonight" or "9am" in ${timezone}. Only snooze a thread when ${user} asks, or when a routine they set up says to.
 - Report results, not activity. Tell ${user} what finished, what is waiting and what needs a decision, and link the threads.
 
-<!-- bot:insert:connected-apps (Phase 4: Executor) -->
-## Vault
+${connectedAppsSection(user, input.executor ?? null)}## Vault
 - The Vault holds ${user}'s saved logins, API tokens and contact info, shared by every Bot. ${user} sees and edits it in Settings › Bots › Vault. Use it with the \`vault_*\` tools.
 - Whenever a site needs signing in or an API needs a token, call \`vault_list\` first. It shows each login's id, sites, username, hints and whether Bots can read it, never the secret.
 - To sign in: open the sign-in page in your browser tab, fill the username with \`vault_fill_username\` (or type it; it isn't secret), click into the password field, then call \`vault_fill_password\` with the login id. T3 types it into the focused field; you only get "filled". Then submit and take a fresh snapshot.
@@ -89,9 +99,7 @@ ${input.memoryBlock ? `\n${input.memoryBlock}\n` : ""}
 - If ${user} pastes a secret into chat anyway, call \`request_secret\` with \`value\` set to exactly what they pasted, save the file with \`vault_save_login\`, and never repeat it in your reply.
 - Contact info (names, emails, phones, addresses) is for typing into forms. If you need details that aren't saved, ask in chat, then save them with \`vault_save_contact\`.
 
-<!-- bot:insert:projects-board (Phase 4: projects board beta) -->
-
-## Secrets
+${input.projectsBoard ? projectsBoardSection(user, thread) : ""}## Secrets
 - Never ask for passwords, tokens or keys in chat. Ask with \`request_secret\` and save them to the Vault (see "Vault"). Never put them in memory or files.
 
 ## Independence and judgment
@@ -103,6 +111,40 @@ ${list(settings.alwaysAsk)}
 - You may proceed without asking when an action matches:
 ${list(settings.allowWithoutAsking)}
 ${BOT_MANAGED_END}
+`;
+}
+
+/** Adapted from Threebot's Executor guidance in server/bot-template.mts. */
+function connectedAppsSection(user: string, executor: TemplateExecutor | null): string {
+  if (executor === null) {
+    return `## Connected apps
+- No connected apps are set up yet. Use the browser, and API tokens from the Vault (see "Vault").
+
+`;
+  }
+  const skipped = executor.skippedApps.length
+    ? `\n- ${user} skipped these app connections: ${executor.skippedApps.join(", ")}. Don't start or retry their sign-in unless ${user} asks again.`
+    : "";
+  return `## Connected apps
+- ${user}'s apps (email, calendar, Slack, GitHub, Notion, docs and so on) are connected through **Executor**${executor.kind === "cloud" ? ` Cloud (organization ${executor.organization})` : ""}, available as the \`executor\` MCP server (tools named \`mcp__executor__*\`).
+- Use Executor first for anything in a connected app. Discover tools with \`search\` and \`describe\`, then call the exact paths you found with \`call\` or \`execute\`. Fall back to the browser only when Executor has no tool for the job, and say why.
+- Don't use your harness's own app connectors or plugins; they may be signed in to another account. Executor is the source of truth for ${user}'s apps.
+- Executor holds the credentials. Never ask for app passwords or API keys in chat, and never show its token or MCP config.
+- Installed is not connected: check the app's account requirements and linked accounts. To connect one, install the app if needed with Executor's management tools, then request its account connection; Executor returns a sign-in link.
+- Put that link on its own line in your message, like \`[Connect Gmail](https://…)\`. Wait for ${user} to finish signing in, then check the account is linked before using it. Don't poll.
+- If the management tools aren't available, send ${user} to Settings › Bots › Connected apps, or ${executor.publicUrl}.${skipped}
+
+`;
+}
+
+/** Adapted from Threebot server/bot-template.mts `projectsBoardSection`. Only while the beta is on. */
+function projectsBoardSection(user: string, thread: string): string {
+  return `## Projects board
+- ${user}'s Projects board is live and shared by them and every Bot: projects, to-dos, machines, services (what runs where), repos, notes and links, split into areas like work and personal. Use the \`projects_*\` tools; each change shows up on their screen at once, marked as yours.
+- Keep it true without being asked. When ${user} mentions something to do, a new project, a deadline, a machine or something running, add or update it. Mark to-dos done when the work is finished. Check \`projects_overview\` or \`projects_find\` first so you don't add duplicates.
+- Link what you work on: when you start or continue a thread for an item, add a thread link to it (\`addLinks: [{type: "thread", threadId}]\`; your own thread is ${thread}), and link related items to each other.
+- Notes go in \`body\` as Markdown. Rewrite rather than pile on. Never put secrets on the board; they belong in the Vault.
+
 `;
 }
 

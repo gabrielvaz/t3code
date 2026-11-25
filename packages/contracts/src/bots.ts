@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
@@ -47,6 +48,10 @@ export type BotAvatar = typeof BotAvatar.Type;
 export const BotMemoryTidy = Schema.Literals(["off", "daily", "weekly"]);
 export type BotMemoryTidy = typeof BotMemoryTidy.Type;
 
+/** How Executor answers its own approval prompts for this Bot: ask the model, or approve them. */
+export const BotExecutorApproval = Schema.Literals(["ask", "automatic"]);
+export type BotExecutorApproval = typeof BotExecutorApproval.Type;
+
 /** `bots/<slug>/.bot/bot.json`, the single source of truth for a Bot. */
 export const Bot = Schema.Struct({
   id: BotId,
@@ -66,6 +71,7 @@ export const Bot = Schema.Struct({
   updatedAt: IsoDateTime,
   memoryTidy: BotMemoryTidy,
   memoryTidyTaskId: Schema.NullOr(Schema.String),
+  executorApproval: BotExecutorApproval.pipe(Schema.withDecodingDefault(Effect.succeed("ask"))),
 });
 export type Bot = typeof Bot.Type;
 
@@ -116,6 +122,7 @@ export const BotUpdateInput = Schema.Struct({
   order: Schema.optional(Schema.Number),
   primary: Schema.optional(Schema.Boolean),
   memoryTidy: Schema.optional(BotMemoryTidy),
+  executorApproval: Schema.optional(BotExecutorApproval),
 });
 export type BotUpdateInput = typeof BotUpdateInput.Type;
 
@@ -330,6 +337,318 @@ export class BotVaultError extends Schema.TaggedError<BotVaultError>()("BotVault
   }
 }
 
+export const BOT_BOARD_KINDS = [
+  "project",
+  "task",
+  "machine",
+  "service",
+  "repo",
+  "note",
+  "link",
+] as const;
+export const BotBoardKind = Schema.Literals(BOT_BOARD_KINDS);
+export type BotBoardKind = typeof BotBoardKind.Type;
+
+/** The statuses each kind takes, first is the default (last for machines and services). */
+export const BOT_BOARD_STATUSES: Readonly<Record<BotBoardKind, ReadonlyArray<string>>> = {
+  project: ["active", "paused", "idea", "done"],
+  task: ["todo", "doing", "waiting", "done"],
+  machine: ["online", "offline", "unknown"],
+  service: ["running", "stopped", "failing", "unknown"],
+  repo: ["active", "archived"],
+  note: [],
+  link: [],
+};
+export const BOT_BOARD_PRIORITIES = ["high", "normal", "low"] as const;
+export const BOT_BOARD_MAX_BATCH = 100;
+
+export const BotBoardActor = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("user") }),
+  Schema.Struct({
+    type: Schema.Literal("bot"),
+    name: Schema.optional(Schema.String),
+    slug: Schema.optional(Schema.String),
+  }),
+]);
+export type BotBoardActor = typeof BotBoardActor.Type;
+
+const BoardLabel = { label: Schema.optional(Schema.String) };
+export const BotBoardLink = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("thread"),
+    threadId: Schema.String,
+    environmentId: Schema.optional(Schema.String),
+    ...BoardLabel,
+  }),
+  Schema.Struct({ type: Schema.Literal("bot"), slug: Schema.String, ...BoardLabel }),
+  Schema.Struct({ type: Schema.Literal("item"), id: Schema.String, ...BoardLabel }),
+  Schema.Struct({ type: Schema.Literal("url"), url: Schema.String, ...BoardLabel }),
+]);
+export type BotBoardLink = typeof BotBoardLink.Type;
+
+export const BotBoardFieldValue = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Array(Schema.String),
+]);
+export type BotBoardFieldValue = typeof BotBoardFieldValue.Type;
+export const BOT_BOARD_FIELD_NAMES = [
+  "url",
+  "path",
+  "host",
+  "port",
+  "branch",
+  "due",
+  "priority",
+  "owner",
+  "tags",
+] as const;
+
+export const BotBoardItem = Schema.Struct({
+  id: Schema.String,
+  kind: BotBoardKind,
+  title: Schema.String,
+  status: Schema.optional(Schema.String),
+  area: Schema.optional(Schema.String),
+  body: Schema.optional(Schema.String),
+  parentId: Schema.optional(Schema.String),
+  machineId: Schema.optional(Schema.String),
+  fields: Schema.Record(Schema.String, BotBoardFieldValue),
+  links: Schema.Array(BotBoardLink),
+  pinned: Schema.Boolean,
+  order: Schema.optional(Schema.Number),
+  archived: Schema.Boolean,
+  doneAt: Schema.optional(Schema.String),
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+  createdBy: BotBoardActor,
+  updatedBy: BotBoardActor,
+});
+export type BotBoardItem = typeof BotBoardItem.Type;
+
+export const BotBoardActivity = Schema.Struct({
+  seq: Schema.Number,
+  at: Schema.String,
+  actor: BotBoardActor,
+  itemId: Schema.String,
+  kind: BotBoardKind,
+  title: Schema.String,
+  action: Schema.Literals(["created", "archived", "restored", "completed", "updated", "deleted"]),
+  changed: Schema.Array(Schema.String),
+});
+export type BotBoardActivity = typeof BotBoardActivity.Type;
+
+/** The whole board first, then only what each save or delete changed. */
+export const BotBoardEvent = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("snapshot"),
+    version: Schema.Number,
+    items: Schema.Array(BotBoardItem),
+    activity: Schema.Array(BotBoardActivity),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("change"),
+    version: Schema.Number,
+    items: Schema.Array(BotBoardItem),
+    removed: Schema.Array(Schema.String),
+    activity: Schema.Array(BotBoardActivity),
+  }),
+]);
+export type BotBoardEvent = typeof BotBoardEvent.Type;
+
+export const BotBoardSubscribeInput = Schema.Struct({});
+export type BotBoardSubscribeInput = typeof BotBoardSubscribeInput.Type;
+
+const NullableText = Schema.optional(Schema.NullOr(Schema.String));
+
+/** Without id, creates an item; with id, changes only what is given. null clears a property. */
+export const BotBoardItemInput = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  ref: Schema.optional(Schema.String),
+  kind: Schema.optional(BotBoardKind),
+  title: Schema.optional(Schema.String),
+  status: NullableText,
+  area: NullableText,
+  body: NullableText,
+  parentId: NullableText,
+  machineId: NullableText,
+  fields: Schema.optional(
+    Schema.NullOr(Schema.Record(Schema.String, Schema.NullOr(BotBoardFieldValue))),
+  ),
+  links: Schema.optional(Schema.NullOr(Schema.Array(BotBoardLink))),
+  addLinks: Schema.optional(Schema.Array(BotBoardLink)),
+  removeLinks: Schema.optional(Schema.Array(BotBoardLink)),
+  pinned: Schema.optional(Schema.Boolean),
+  order: Schema.optional(Schema.NullOr(Schema.Number)),
+  archived: Schema.optional(Schema.Boolean),
+});
+export type BotBoardItemInput = typeof BotBoardItemInput.Type;
+
+export const BotBoardSaveInput = Schema.Struct({
+  items: Schema.Array(BotBoardItemInput).check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(BOT_BOARD_MAX_BATCH),
+  ),
+});
+export type BotBoardSaveInput = typeof BotBoardSaveInput.Type;
+
+export const BotBoardSaveResult = Schema.Struct({
+  version: Schema.Number,
+  items: Schema.Array(BotBoardItem),
+  unchanged: Schema.optional(Schema.Boolean),
+});
+export type BotBoardSaveResult = typeof BotBoardSaveResult.Type;
+
+export const BotBoardDeleteInput = Schema.Struct({
+  ids: Schema.Array(Schema.String).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
+});
+export type BotBoardDeleteInput = typeof BotBoardDeleteInput.Type;
+
+export const BotBoardDeleteResult = Schema.Struct({
+  version: Schema.Number,
+  removed: Schema.Array(Schema.String),
+});
+export type BotBoardDeleteResult = typeof BotBoardDeleteResult.Type;
+
+export class BotBoardError extends Schema.TaggedError<BotBoardError>()("BotBoardError", {
+  reason: Schema.Literals(["invalid", "storage", "disabled"]),
+  detail: Schema.String,
+}) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
+export const BotExecutorAccount = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  linked: Schema.Boolean,
+  signIn: Schema.Literals(["saved", "reconnect", "unavailable"]),
+});
+export type BotExecutorAccount = typeof BotExecutorAccount.Type;
+
+export const BotExecutorAccountScope = Schema.Literals(["user", "app"]);
+export type BotExecutorAccountScope = typeof BotExecutorAccountScope.Type;
+
+export const BotExecutorRequirement = Schema.Struct({
+  id: Schema.String,
+  scope: BotExecutorAccountScope,
+  name: Schema.String,
+  cardinality: Schema.Literals(["one", "many"]),
+  accounts: Schema.Array(BotExecutorAccount),
+});
+export type BotExecutorRequirement = typeof BotExecutorRequirement.Type;
+
+export const BotExecutorApp = Schema.Struct({
+  id: Schema.String,
+  slug: Schema.String,
+  name: Schema.String,
+  status: Schema.Literals(["connected", "needs-connection", "ready", "unknown"]),
+  requirements: Schema.Array(BotExecutorRequirement),
+  error: Schema.optional(Schema.String),
+  icon: Schema.optional(Schema.String),
+  domain: Schema.optional(Schema.String),
+});
+export type BotExecutorApp = typeof BotExecutorApp.Type;
+
+export const BotExecutorStatusInput = Schema.Struct({});
+export type BotExecutorStatusInput = typeof BotExecutorStatusInput.Type;
+
+export const BotExecutorStatus = Schema.Struct({
+  configured: Schema.Boolean,
+  backend: Schema.Literals(["self-hosted", "cloud"]),
+  organization: Schema.NullOr(Schema.String),
+  /** Where the user signs in to apps. */
+  publicUrl: Schema.NullOr(Schema.String),
+  hasToken: Schema.Boolean,
+  /** Both the REST API and the MCP server answered. */
+  ok: Schema.Boolean,
+  error: Schema.optional(Schema.String),
+  apps: Schema.optional(
+    Schema.Struct({
+      total: NonNegativeInt,
+      connected: NonNegativeInt,
+      needsConnection: NonNegativeInt,
+      ready: NonNegativeInt,
+      unknown: NonNegativeInt,
+    }),
+  ),
+  mcpTools: Schema.optional(Schema.Array(Schema.String)),
+});
+export type BotExecutorStatus = typeof BotExecutorStatus.Type;
+
+export const BotExecutorCatalogInput = Schema.Struct({
+  search: Schema.optional(Schema.String.check(Schema.isMaxLength(100))),
+});
+export type BotExecutorCatalogInput = typeof BotExecutorCatalogInput.Type;
+
+export const BotExecutorCatalogEntry = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  description: Schema.String,
+  icon: Schema.NullOr(Schema.String),
+  auth: Schema.Array(Schema.String),
+  category: Schema.optional(Schema.String),
+});
+export type BotExecutorCatalogEntry = typeof BotExecutorCatalogEntry.Type;
+
+export const BotExecutorCatalogResult = Schema.Struct({
+  entries: Schema.Array(BotExecutorCatalogEntry),
+});
+export type BotExecutorCatalogResult = typeof BotExecutorCatalogResult.Type;
+
+export const BotExecutorInstallInput = Schema.Struct({
+  entry: TrimmedNonEmptyString.check(Schema.isMaxLength(512)),
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
+});
+export type BotExecutorInstallInput = typeof BotExecutorInstallInput.Type;
+
+export const BotExecutorAppResult = Schema.Struct({ app: BotExecutorApp });
+export type BotExecutorAppResult = typeof BotExecutorAppResult.Type;
+
+export const BotExecutorConnectionsInput = Schema.Struct({});
+export type BotExecutorConnectionsInput = typeof BotExecutorConnectionsInput.Type;
+
+export const BotExecutorConnectionsResult = Schema.Struct({
+  apps: Schema.Array(BotExecutorApp),
+});
+export type BotExecutorConnectionsResult = typeof BotExecutorConnectionsResult.Type;
+
+const ExecutorRequirementTarget = {
+  appId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+  requirement: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+  scope: BotExecutorAccountScope,
+};
+
+export const BotExecutorConnectInput = Schema.Struct({
+  ...ExecutorRequirementTarget,
+  /** An existing account to sign in again. */
+  account: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(256))),
+});
+export type BotExecutorConnectInput = typeof BotExecutorConnectInput.Type;
+
+export const BotExecutorConnectResult = Schema.Struct({
+  /** Executor's sign-in page for the account. */
+  url: Schema.String,
+  expiresAt: Schema.String,
+});
+export type BotExecutorConnectResult = typeof BotExecutorConnectResult.Type;
+
+export const BotExecutorDisconnectInput = Schema.Struct({
+  ...ExecutorRequirementTarget,
+  account: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+});
+export type BotExecutorDisconnectInput = typeof BotExecutorDisconnectInput.Type;
+
+export class BotExecutorError extends Schema.TaggedError<BotExecutorError>()("BotExecutorError", {
+  reason: Schema.Literals(["not-configured", "unreachable", "rejected", "invalid", "failed"]),
+  detail: Schema.String,
+}) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
 export class BotNotFoundError extends Schema.TaggedError<BotNotFoundError>()("BotNotFoundError", {
   id: BotId,
 }) {
@@ -385,5 +704,7 @@ export const BotError = Schema.Union([
   BotStorageError,
   BotInvalidError,
   BotVaultError,
+  BotBoardError,
+  BotExecutorError,
 ]);
 export type BotError = typeof BotError.Type;

@@ -3,13 +3,17 @@
 // The Bots' Vault tools. A Bot never sees a website password: T3 types it into the Bot's own
 // browser tab after checking the tab is on the login's site. Results and errors never carry secrets.
 import {
+  type BotBoardError,
   type BotVaultError,
   OrchestratorMcpFailure,
   type PreviewAutomationStatus,
   type PreviewTabId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import type * as Schema from "effect/Schema";
 
+import * as BotProjectsBoard from "../../../bots/BotProjectsBoard.ts";
+import { boardDetail, boardFind, boardOverview } from "../../../bots/BotProjectsBoard.ts";
 import * as BotService from "../../../bots/BotService.ts";
 import * as BotVault from "../../../bots/BotVault.ts";
 import { hostOf, matchesSite, siteDomain } from "../../../bots/BotVault.ts";
@@ -29,13 +33,34 @@ const fromVault = (error: BotVaultError) =>
     error.message,
   );
 
+const fromBoard = (error: BotBoardError) =>
+  failure(
+    error.reason === "invalid"
+      ? "invalid_request"
+      : error.reason === "disabled"
+        ? "capability_denied"
+        : "orchestration_error",
+    error.message,
+  );
+
+/** Board results are plain JSON; the schema only promises an object of JSON values. */
+const asJson = (value: object) => value as Readonly<Record<string, Schema.Json>>;
+
+const readBoard = Effect.gen(function* () {
+  const board = yield* BotProjectsBoard.BotProjectsBoard;
+  if (!(yield* board.enabled)) {
+    return yield* failure("capability_denied", "The Projects board is off.");
+  }
+  return yield* board.snapshot.pipe(Effect.mapError(fromBoard));
+});
+
 /** The tools are listed only in a Bot's thread; calls are checked again here. */
 const requireBot = Effect.gen(function* () {
   const scope = yield* McpInvocationContext.McpInvocationContext;
   const bots = yield* BotService.BotService;
   const bot = scope.thread === undefined ? null : yield* bots.botForThread(scope.thread.threadId);
   if (bot === null) {
-    return yield* failure("capability_denied", "Vault tools work only in a Bot's own thread.");
+    return yield* failure("capability_denied", "These tools work only in a Bot's own thread.");
   }
   return bot;
 });
@@ -186,6 +211,59 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
       if (!login.password)
         return yield* failure("invalid_request", "That login has no saved token.");
       return yield* vault.writeSecretFile(login).pipe(Effect.mapError(fromVault));
+    }),
+  ),
+  projects_overview: McpToolAccess.readsAsCaller(() =>
+    Effect.gen(function* () {
+      yield* requireBot;
+      const { items, activity } = yield* readBoard;
+      return asJson(boardOverview(items, activity));
+    }),
+  ),
+  projects_find: McpToolAccess.readsAsCaller((query) =>
+    Effect.gen(function* () {
+      yield* requireBot;
+      const { items } = yield* readBoard;
+      const found = boardFind(items, query);
+      return { total: found.total, items: found.items.map(asJson) };
+    }),
+  ),
+  projects_get: McpToolAccess.readsAsCaller(({ id }) =>
+    Effect.gen(function* () {
+      yield* requireBot;
+      const { items } = yield* readBoard;
+      const found = boardDetail(items, id);
+      if (found === null)
+        return yield* failure("invalid_request", "No item with that id. Use projects_find.");
+      return asJson(found);
+    }),
+  ),
+  projects_save: McpToolAccess.actsAsCaller(({ items }) =>
+    Effect.gen(function* () {
+      const bot = yield* requireBot;
+      const board = yield* BotProjectsBoard.BotProjectsBoard;
+      const result = yield* board
+        .save(items, { type: "bot", name: bot.name, slug: bot.slug })
+        .pipe(Effect.mapError(fromBoard));
+      return {
+        saved: result.items.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          title: item.title,
+          ...(item.status ? { status: item.status } : {}),
+        })),
+        ...(result.unchanged ? { note: "Nothing changed: those values were already set." } : {}),
+      };
+    }),
+  ),
+  projects_delete: McpToolAccess.actsAsCaller(({ ids }) =>
+    Effect.gen(function* () {
+      const bot = yield* requireBot;
+      const board = yield* BotProjectsBoard.BotProjectsBoard;
+      const result = yield* board
+        .remove(ids, { type: "bot", name: bot.name, slug: bot.slug })
+        .pipe(Effect.mapError(fromBoard));
+      return { deleted: [...result.removed] };
     }),
   ),
 });

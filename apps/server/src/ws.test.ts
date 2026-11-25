@@ -139,6 +139,8 @@ import * as ReviewService from "./review/ReviewService.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Bots from "./bots/BotService.ts";
 import * as BotVault from "./bots/BotVault.ts";
+import * as BotProjectsBoard from "./bots/BotProjectsBoard.ts";
+import * as BotExecutor from "./bots/BotExecutor.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -897,6 +899,8 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ScheduledTasks.ScheduledTaskService)({}),
   Layer.mock(Bots.BotService)({}),
   Layer.mock(BotVault.BotVault)({}),
+  Layer.mock(BotProjectsBoard.BotProjectsBoard)({}),
+  Layer.mock(BotExecutor.BotExecutor)({}),
   Workflows.layerDisabled,
   Layer.mock(WorkflowRuntime.WorkflowDefinitions)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),

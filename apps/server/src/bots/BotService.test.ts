@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
 import {
+  DEFAULT_SERVER_SETTINGS,
   type OrchestrationV2ServerCommand,
   type Project,
   ProviderInstanceId,
@@ -23,6 +24,7 @@ import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts
 import * as ServerSettings from "../serverSettings.ts";
 import { freeSlug, slugify } from "./BotFiles.ts";
 import { BOT_MEMORY_LIMITS, memorySnapshot, revisionOf } from "./BotMemory.ts";
+import * as BotExecutor from "./BotExecutor.ts";
 import * as Bots from "./BotService.ts";
 import {
   BOT_MANAGED_END,
@@ -91,7 +93,8 @@ const harness = () => {
     deletedForThread: [] as Array<ThreadId>,
   };
   const tasks = new Map<string, ScheduledTask>();
-  const layer = Bots.layer.pipe(
+  const executor: { connection: BotExecutor.ExecutorConnection | null } = { connection: null };
+  const layer = Bots.layerWith({ codexGlobalConfig: null }).pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectService.ProjectService)({
@@ -151,13 +154,16 @@ const harness = () => {
           deleteForThread: (threadId) =>
             Effect.sync(() => void calls.deletedForThread.push(threadId)),
         }),
+        Layer.mock(BotExecutor.BotExecutor)({
+          connection: Effect.sync(() => executor.connection),
+        }),
         ServerSettings.layerTest(),
       ),
     ),
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-bots-test-" })),
     Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
-  return { calls, layer };
+  return { calls, executor, layer };
 };
 
 describe("BotService", () => {
@@ -325,6 +331,46 @@ describe("BotService", () => {
       expect(off.bot).toMatchObject({ memoryTidy: "off", memoryTidyTaskId: "task-1" });
       expect(calls.enabled).toEqual([{ id: "task-1", enabled: false }]);
       expect(calls.upserts).toHaveLength(2);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("writes Executor's MCP entry and guidance per Bot, and takes them back", () => {
+    const { executor, layer } = harness();
+    return Effect.gen(function* () {
+      const bots = yield* Bots.BotService;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { stateDir } = yield* ServerConfig.ServerConfig;
+      const { bot } = yield* bots.create({ name: "Apps", model });
+      const dir = path.join(stateDir, "bots", "apps");
+      const read = (file: string) =>
+        fileSystem.readFileString(path.join(dir, file)).pipe(Effect.orElseSucceed(() => null));
+      expect(yield* read(".mcp.json")).toBeNull();
+      expect(yield* read("AGENTS.md")).toContain("No connected apps are set up yet.");
+
+      executor.connection = {
+        profile: BotExecutor.executorProfile({
+          ...DEFAULT_SERVER_SETTINGS.botsExecutor,
+          url: "http://localhost:4000",
+        })!,
+        token: "tok-123",
+      };
+      const updated = yield* bots.update({ id: bot.id, executorApproval: "automatic" });
+      expect(updated.bot.executorApproval).toBe("automatic");
+      const mcp = JSON.parse((yield* read(".mcp.json"))!);
+      expect(mcp.mcpServers.executor).toEqual({
+        type: "http",
+        url: "http://localhost:4000/mcp?elicitation_mode=automatic",
+        headers: { Authorization: "Bearer tok-123" },
+      });
+      const agents = (yield* read("AGENTS.md"))!;
+      expect(agents).toContain("mcp__executor__");
+      expect(agents).not.toContain("tok-123");
+
+      executor.connection = null;
+      yield* bots.update({ id: bot.id, role: "Inbox" });
+      expect(yield* read(".mcp.json")).toBeNull();
+      expect(yield* read(".codex/config.toml")).toBeNull();
     }).pipe(Effect.provide(layer));
   });
 });

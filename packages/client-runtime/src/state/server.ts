@@ -55,6 +55,7 @@ import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as Persistence from "../platform/persistence.ts";
 import { runCachePersistence } from "./cachePersistence.ts";
+import { applyBotBoardEvent, EMPTY_BOT_BOARD } from "./botBoard.ts";
 import { workflowRunRefreshKey } from "../workflows.ts";
 import {
   currentSession,
@@ -1701,6 +1702,28 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:bots:vault",
       tag: WS_METHODS.botsVaultList,
     }),
+    // The wire carries the board once, then only changes; clients see the whole board.
+    botBoardLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:bots:board",
+      tag: WS_METHODS.botsBoardSubscribe,
+      transform: (stream) =>
+        stream.pipe(
+          Stream.scan(() => EMPTY_BOT_BOARD, applyBotBoardEvent),
+          Stream.drop(1),
+        ),
+    }),
+    botExecutorStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:executor-status",
+      tag: WS_METHODS.botsExecutorStatus,
+    }),
+    botExecutorCatalog: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:executor-catalog",
+      tag: WS_METHODS.botsExecutorCatalog,
+    }),
+    botExecutorConnections: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:bots:executor-connections",
+      tag: WS_METHODS.botsExecutorConnections,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan. With
     // nothing to show yet, the server's last scan answers first, then a plain
@@ -2024,6 +2047,30 @@ export function createServerEnvironmentAtoms<R, E>(
     revealBotVaultPassword: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:bot:vault-reveal",
       tag: WS_METHODS.botsVaultReveal,
+    }),
+    saveBotBoard: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:board-save",
+      tag: WS_METHODS.botsBoardSave,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    deleteBotBoardItems: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:board-delete",
+      tag: WS_METHODS.botsBoardDelete,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    installBotExecutorApp: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:executor-install",
+      tag: WS_METHODS.botsExecutorInstall,
+    }),
+    connectBotExecutorApp: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:executor-connect",
+      tag: WS_METHODS.botsExecutorConnect,
+    }),
+    disconnectBotExecutorApp: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:bot:executor-disconnect",
+      tag: WS_METHODS.botsExecutorDisconnect,
     }),
     importBotVaultCsv: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:bot:vault-import",

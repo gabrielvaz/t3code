@@ -1407,6 +1407,30 @@ export const CloudSpeechCredentials = Schema.Struct({
   openrouter: CloudSpeechCredential,
 });
 
+export const BotsExecutorBackend = Schema.Literals(["self-hosted", "cloud"]);
+export type BotsExecutorBackend = typeof BotsExecutorBackend.Type;
+
+const BotsExecutorText = Schema.String.check(Schema.isMaxLength(2048));
+
+/** Executor (executor.sh), the connected-apps gateway Bots reach as an MCP server. */
+export const BotsExecutorSettings = Schema.Struct({
+  backend: BotsExecutorBackend.pipe(Schema.withDecodingDefault(Effect.succeed("self-hosted"))),
+  /** The REST API. Self-hosted needs it; Cloud defaults to https://app.executor.sh. */
+  url: BotsExecutorText.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  /** Cloud needs it; self-hosted defaults to "executor". */
+  organization: BotsExecutorText.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  /** Empty derives it from the API URL and organization. */
+  mcpUrl: BotsExecutorText.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  /** Where sign-in links point. Empty uses the API URL. */
+  publicUrl: BotsExecutorText.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  token: SettingsSecretValue.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
+  /** App connections the user declined; Bots don't start their sign-in again. */
+  skippedApps: Schema.Array(Schema.String.check(Schema.isMaxLength(120))).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+});
+export type BotsExecutorSettings = typeof BotsExecutorSettings.Type;
+
 export const ServerSettings = Schema.Struct({
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1533,6 +1557,11 @@ export const ServerSettings = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Beta: durable workflows from the workflows folder of the T3 home. Off runs none of them. */
   workflowsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Beta: the Bots' shared Projects board and its tools. */
+  botsProjectsBoardEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  botsExecutor: BotsExecutorSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(BotsExecutorSettings)({}))),
+  ),
   /** Skipped top-level runs kept per workflow; older ones are deleted. */
   workflowSkippedRunsKept: WorkflowSkippedRunsKept.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_WORKFLOW_SKIPPED_RUNS_KEPT)),
@@ -1975,6 +2004,18 @@ export const ServerSettingsPatch = Schema.Struct({
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   workflowsEnabled: Schema.optionalKey(Schema.Boolean),
+  botsProjectsBoardEnabled: Schema.optionalKey(Schema.Boolean),
+  botsExecutor: Schema.optionalKey(
+    Schema.Struct({
+      backend: Schema.optionalKey(BotsExecutorBackend),
+      url: Schema.optionalKey(BotsExecutorText),
+      organization: Schema.optionalKey(BotsExecutorText),
+      mcpUrl: Schema.optionalKey(BotsExecutorText),
+      publicUrl: Schema.optionalKey(BotsExecutorText),
+      token: Schema.optionalKey(SettingsSecretValue),
+      skippedApps: Schema.optionalKey(Schema.Array(Schema.String.check(Schema.isMaxLength(120)))),
+    }),
+  ),
   workflowSkippedRunsKept: Schema.optionalKey(WorkflowSkippedRunsKept),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(

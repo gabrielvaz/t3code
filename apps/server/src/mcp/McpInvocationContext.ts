@@ -170,6 +170,8 @@ export interface McpInvocationScope {
   readonly forge?: boolean;
   /** True when the calling thread is a Bot's main thread; `/mcp` asks BotService per request. */
   readonly botThread?: boolean;
+  /** True while Labs › Projects board is on; set only for a Bot's thread. */
+  readonly projectsBoard?: boolean;
 }
 
 /**
@@ -250,6 +252,13 @@ export const hiddenUnlessBotThread = (): boolean => {
   const fiber = Fiber.getCurrent();
   const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
   return scope?.thread !== undefined && scope.botThread === true;
+};
+
+/** `McpSchema.EnabledWhen` for the Projects board tools: a Bot's thread, while the beta is on. */
+export const hiddenUnlessBotBoard = (): boolean => {
+  const fiber = Fiber.getCurrent();
+  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
+  return scope?.thread !== undefined && scope.botThread === true && scope.projectsBoard === true;
 };
 
 /** `McpSchema.EnabledWhen` for workflow event types: outside clients only, while Workflows is on. */

@@ -1,7 +1,17 @@
-import { OrchestratorMcpFailure, PreviewTabId } from "@t3tools/contracts";
+import {
+  BOT_BOARD_FIELD_NAMES,
+  BOT_BOARD_KINDS,
+  BOT_BOARD_MAX_BATCH,
+  BOT_BOARD_PRIORITIES,
+  BOT_BOARD_STATUSES,
+  BotBoardLink,
+  OrchestratorMcpFailure,
+  PreviewTabId,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { McpSchema, Tool, Toolkit } from "effect/ai";
 
+import * as BotProjectsBoard from "../../../bots/BotProjectsBoard.ts";
 import * as BotService from "../../../bots/BotService.ts";
 import * as BotVault from "../../../bots/BotVault.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -12,6 +22,7 @@ const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    BotProjectsBoard.BotProjectsBoard,
     BotService.BotService,
     BotVault.BotVault,
     McpInvocationContext.McpInvocationContext,
@@ -63,6 +74,68 @@ const FillResult = Schema.Struct({
 
 const botTool = <T extends Tool.Any>(tool: T): T =>
   tool.annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenUnlessBotThread) as T;
+
+const boardTool = <T extends Tool.Any>(tool: T): T =>
+  tool.annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenUnlessBotBoard) as T;
+
+const statusHelp = Object.entries(BOT_BOARD_STATUSES)
+  .filter(([, list]) => list.length > 0)
+  .map(([kind, list]) => `${kind}: ${list.join("|")}`)
+  .join("; ");
+const NullableId = Schema.optional(Schema.NullOr(Schema.String));
+const BoardLinks = Schema.Array(BotBoardLink);
+const BoardJson = Schema.Record(Schema.String, Schema.Json);
+
+const BoardItemInput = Schema.Struct({
+  id: Schema.optional(
+    Schema.String.annotate({
+      description: "Leave out to create. Give an id to change only what you pass.",
+    }),
+  ),
+  ref: Schema.optional(
+    Schema.String.annotate({
+      description:
+        'Names a new item so others in this call can use parentId or machineId "ref:<name>".',
+    }),
+  ),
+  kind: Schema.optional(Schema.Literals(BOT_BOARD_KINDS)),
+  title: Schema.optional(Schema.String),
+  status: Schema.optional(
+    Schema.NullOr(Schema.String).annotate({ description: `By kind: ${statusHelp}.` }),
+  ),
+  area: Schema.optional(
+    Schema.NullOr(Schema.String).annotate({
+      description: "e.g. work or personal. Reuse areas already on the board.",
+    }),
+  ),
+  parentId: NullableId.annotate({ description: "The project it belongs to; null takes it out." }),
+  machineId: NullableId.annotate({ description: "For services and repos: the machine item." }),
+  body: Schema.optional(
+    Schema.NullOr(Schema.String).annotate({
+      description: "Markdown notes. Replaces the old body; read it first with projects_get.",
+    }),
+  ),
+  fields: Schema.optional(
+    Schema.Record(
+      Schema.String,
+      Schema.NullOr(Schema.Union([Schema.String, Schema.Number, Schema.Array(Schema.String)])),
+    ).annotate({
+      description: `Merged into existing ones; null removes one. ${BOT_BOARD_FIELD_NAMES.join(", ")}. due is YYYY-MM-DD, priority ${BOT_BOARD_PRIORITIES.join("|")}, tags a list.`,
+    }),
+  ),
+  addLinks: Schema.optional(
+    BoardLinks.annotate({
+      description:
+        "thread {threadId, environmentId?}, bot {slug}, item {id} or url {url}; each may have a label.",
+    }),
+  ),
+  removeLinks: Schema.optional(BoardLinks),
+  pinned: Schema.optional(Schema.Boolean),
+  order: Schema.optional(Schema.NullOr(Schema.Number)),
+  archived: Schema.optional(
+    Schema.Boolean.annotate({ description: "true hides it without deleting; false restores." }),
+  ),
+});
 
 export const BotsToolkit = Toolkit.make(
   botTool(
@@ -160,5 +233,85 @@ export const BotsToolkit = Toolkit.make(
         expiresInMinutes: Schema.Number,
       }),
     }).annotate(Tool.Destructive, false),
+  ),
+  boardTool(
+    Tool.make("projects_overview", {
+      ...shared,
+      description:
+        "The user's Projects board at a glance: projects with open to-do counts, open to-dos by priority and due date, machines with what runs on each, and recent changes. Read it before adding things so you don't duplicate.",
+      success: BoardJson,
+    })
+      .annotate(Tool.Readonly, true)
+      .annotate(Tool.Destructive, false)
+      .annotate(Tool.Idempotent, true),
+  ),
+  boardTool(
+    Tool.make("projects_find", {
+      ...shared,
+      description:
+        "Search the Projects board by words (titles, notes, tags, paths, hosts) or filter by kind, status, area, parent, machine or a linked thread.",
+      parameters: Schema.Struct({
+        search: Schema.optional(Schema.String),
+        kind: Schema.optional(Schema.Literals(BOT_BOARD_KINDS)),
+        status: Schema.optional(Schema.String),
+        open: Schema.optional(Schema.Boolean.annotate({ description: "Only to-dos not done." })),
+        area: Schema.optional(Schema.String),
+        parentId: Schema.optional(Schema.String),
+        machineId: Schema.optional(Schema.String),
+        threadId: Schema.optional(Schema.String),
+        includeArchived: Schema.optional(Schema.Boolean),
+        limit: Schema.optional(Schema.Number),
+      }),
+      success: Schema.Struct({ total: Schema.Number, items: Schema.Array(BoardJson) }),
+    })
+      .annotate(Tool.Readonly, true)
+      .annotate(Tool.Destructive, false)
+      .annotate(Tool.Idempotent, true),
+  ),
+  boardTool(
+    Tool.make("projects_get", {
+      ...shared,
+      description:
+        "One board item in full: notes, fields, links, what's inside it, what runs on it (machines) and what links to it.",
+      parameters: Schema.Struct({ id: Schema.String }),
+      success: BoardJson,
+    })
+      .annotate(Tool.Readonly, true)
+      .annotate(Tool.Destructive, false)
+      .annotate(Tool.Idempotent, true),
+  ),
+  boardTool(
+    Tool.make("projects_save", {
+      ...shared,
+      description: `Create or change Projects board items, up to ${BOT_BOARD_MAX_BATCH} at once, all or nothing. The user sees each change at once. To add a project with its to-dos in one call, give the project ref "x" and the to-dos parentId "ref:x". Mark a to-do done with status "done".`,
+      parameters: Schema.Struct({
+        items: Schema.Array(BoardItemInput).check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(BOT_BOARD_MAX_BATCH),
+        ),
+      }),
+      success: Schema.Struct({
+        saved: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            kind: Schema.String,
+            title: Schema.String,
+            status: Schema.optional(Schema.String),
+          }),
+        ),
+        note: Schema.optional(Schema.String),
+      }),
+    }).annotate(Tool.Destructive, false),
+  ),
+  boardTool(
+    Tool.make("projects_delete", {
+      ...shared,
+      description:
+        "Delete board items for good; what's inside moves up to their parent. Prefer archived: true with projects_save unless the user wants it gone.",
+      parameters: Schema.Struct({
+        ids: Schema.Array(Schema.String).check(Schema.isMinLength(1)),
+      }),
+      success: Schema.Struct({ deleted: Schema.Array(Schema.String) }),
+    }).annotate(Tool.Destructive, true),
   ),
 );

@@ -31,6 +31,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { BotAvatar } from "./BotAvatar";
+import { BotConnectedAppsSettings } from "./BotConnectedAppsSettings";
 import { BotSharedMemoryEditor } from "./BotPage";
 import { BotVaultSettings } from "./BotVaultSettings";
 import { parseBotRuleList, sortBotsForSidebar } from "./bots.logic";
@@ -324,6 +325,8 @@ function BotsSharedSettingsSections({
         cwd={undefined}
         onReload={memoryQuery.refresh}
       />
+
+      <BotConnectedAppsSettings environmentId={environmentId} />
 
       <BotVaultSettings environmentId={environmentId} />
     </>

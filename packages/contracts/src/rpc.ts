@@ -486,6 +486,23 @@ import {
   BotVaultRevealResult,
   BotVaultUpsertInput,
   BotVaultUpsertResult,
+  BotBoardDeleteInput,
+  BotBoardDeleteResult,
+  BotBoardEvent,
+  BotBoardSaveInput,
+  BotBoardSaveResult,
+  BotBoardSubscribeInput,
+  BotExecutorAppResult,
+  BotExecutorCatalogInput,
+  BotExecutorCatalogResult,
+  BotExecutorConnectInput,
+  BotExecutorConnectResult,
+  BotExecutorConnectionsInput,
+  BotExecutorConnectionsResult,
+  BotExecutorDisconnectInput,
+  BotExecutorInstallInput,
+  BotExecutorStatus,
+  BotExecutorStatusInput,
 } from "./bots.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
@@ -706,6 +723,15 @@ export const WS_METHODS = {
   botsVaultDelete: "bots.vaultDelete",
   botsVaultReveal: "bots.vaultReveal",
   botsVaultImportCsv: "bots.vaultImportCsv",
+  botsBoardSubscribe: "bots.boardSubscribe",
+  botsBoardSave: "bots.boardSave",
+  botsBoardDelete: "bots.boardDelete",
+  botsExecutorStatus: "bots.executorStatus",
+  botsExecutorCatalog: "bots.executorCatalog",
+  botsExecutorInstall: "bots.executorInstall",
+  botsExecutorConnections: "bots.executorConnections",
+  botsExecutorConnect: "bots.executorConnect",
+  botsExecutorDisconnect: "bots.executorDisconnect",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -2610,6 +2636,61 @@ const WsBotsVaultImportCsvRpc = Rpc.make(WS_METHODS.botsVaultImportCsv, {
   error: WsBotError,
 });
 
+const WsBotsBoardSubscribeRpc = Rpc.make(WS_METHODS.botsBoardSubscribe, {
+  payload: BotBoardSubscribeInput,
+  success: BotBoardEvent,
+  error: WsBotError,
+  stream: true,
+});
+
+const WsBotsBoardSaveRpc = Rpc.make(WS_METHODS.botsBoardSave, {
+  payload: BotBoardSaveInput,
+  success: BotBoardSaveResult,
+  error: WsBotError,
+});
+
+const WsBotsBoardDeleteRpc = Rpc.make(WS_METHODS.botsBoardDelete, {
+  payload: BotBoardDeleteInput,
+  success: BotBoardDeleteResult,
+  error: WsBotError,
+});
+
+const WsBotsExecutorStatusRpc = Rpc.make(WS_METHODS.botsExecutorStatus, {
+  payload: BotExecutorStatusInput,
+  success: BotExecutorStatus,
+  error: WsBotError,
+});
+
+const WsBotsExecutorCatalogRpc = Rpc.make(WS_METHODS.botsExecutorCatalog, {
+  payload: BotExecutorCatalogInput,
+  success: BotExecutorCatalogResult,
+  error: WsBotError,
+});
+
+const WsBotsExecutorInstallRpc = Rpc.make(WS_METHODS.botsExecutorInstall, {
+  payload: BotExecutorInstallInput,
+  success: BotExecutorAppResult,
+  error: WsBotError,
+});
+
+const WsBotsExecutorConnectionsRpc = Rpc.make(WS_METHODS.botsExecutorConnections, {
+  payload: BotExecutorConnectionsInput,
+  success: BotExecutorConnectionsResult,
+  error: WsBotError,
+});
+
+const WsBotsExecutorConnectRpc = Rpc.make(WS_METHODS.botsExecutorConnect, {
+  payload: BotExecutorConnectInput,
+  success: BotExecutorConnectResult,
+  error: WsBotError,
+});
+
+const WsBotsExecutorDisconnectRpc = Rpc.make(WS_METHODS.botsExecutorDisconnect, {
+  payload: BotExecutorDisconnectInput,
+  success: BotExecutorAppResult,
+  error: WsBotError,
+});
+
 export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthorization>()(
   "t3/contracts/RpcScopeAuthorization",
   { error: EnvironmentAuthorizationError },
@@ -2731,6 +2812,15 @@ export const WsRpcGroup = RpcGroup.make(
   WsBotsVaultDeleteRpc,
   WsBotsVaultRevealRpc,
   WsBotsVaultImportCsvRpc,
+  WsBotsBoardSubscribeRpc,
+  WsBotsBoardSaveRpc,
+  WsBotsBoardDeleteRpc,
+  WsBotsExecutorStatusRpc,
+  WsBotsExecutorCatalogRpc,
+  WsBotsExecutorInstallRpc,
+  WsBotsExecutorConnectionsRpc,
+  WsBotsExecutorConnectRpc,
+  WsBotsExecutorDisconnectRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,

@@ -97,6 +97,12 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.botsVaultImportCsv]: AuthOrchestrationOperateScope,
   // Shows a saved password in the clear, so it needs the scope that edits server secrets.
   [WS_METHODS.botsVaultReveal]: AuthSettingsWriteScope,
+  [WS_METHODS.botsBoardSave]: AuthOrchestrationOperateScope,
+  [WS_METHODS.botsBoardDelete]: AuthOrchestrationOperateScope,
+  // Executor holds the user's app accounts; changing them is a settings change.
+  [WS_METHODS.botsExecutorInstall]: AuthSettingsWriteScope,
+  [WS_METHODS.botsExecutorConnect]: AuthSettingsWriteScope,
+  [WS_METHODS.botsExecutorDisconnect]: AuthSettingsWriteScope,
   [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: AuthOrchestrationOperateScope,
   // An answer, a resume and a cancel each decide what a run's agents do next.
   [WS_METHODS.workflowsAnswer]: AuthOrchestrationOperateScope,

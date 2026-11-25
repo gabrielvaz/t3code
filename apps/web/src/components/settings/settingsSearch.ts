@@ -585,6 +585,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("workflow history retention delete old skipped runs webhook")],
   },
   {
+    id: "bots-projects-board",
+    title: msg("Projects board"),
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: [msg("beta bots board projects tasks to-dos todo machines services kanban")],
+  },
+  {
     id: "prompt-suggestions-beta",
     title: msg("Suggest next prompt"),
     to: "/settings/labs",
@@ -1156,6 +1163,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("Shared memory"),
     to: "/settings/bots",
     searchTerms: [msg("bot memory notes vault")],
+  },
+  {
+    id: "bots-connected-apps",
+    title: msg("Connected apps"),
+    to: "/settings/bots",
+    searchTerms: [msg("bot executor apps gmail calendar slack github notion connect oauth mcp")],
   },
   {
     id: "bots-vault",

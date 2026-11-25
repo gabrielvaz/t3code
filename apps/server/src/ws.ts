@@ -137,6 +137,8 @@ import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Bots from "./bots/BotService.ts";
 import * as BotVault from "./bots/BotVault.ts";
+import * as BotProjectsBoard from "./bots/BotProjectsBoard.ts";
+import * as BotExecutor from "./bots/BotExecutor.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -1514,6 +1516,8 @@ export const layerWsRpc = (
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const bots = yield* Bots.BotService;
       const botVault = yield* BotVault.BotVault;
+      const botBoard = yield* BotProjectsBoard.BotProjectsBoard;
+      const botExecutor = yield* BotExecutor.BotExecutor;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2482,6 +2486,19 @@ export const layerWsRpc = (
         [WS_METHODS.botsVaultReveal]: (input) =>
           botVault.reveal(input.id).pipe(Effect.map((password) => ({ password }))),
         [WS_METHODS.botsVaultImportCsv]: (input) => botVault.importItems(input.items),
+        [WS_METHODS.botsBoardSubscribe]: (_input) => botBoard.subscribe(),
+        [WS_METHODS.botsBoardSave]: (input) => botBoard.save(input.items),
+        [WS_METHODS.botsBoardDelete]: (input) => botBoard.remove(input.ids),
+        [WS_METHODS.botsExecutorStatus]: (_input) => botExecutor.status,
+        [WS_METHODS.botsExecutorCatalog]: (input) =>
+          botExecutor.catalog(input.search).pipe(Effect.map((entries) => ({ entries }))),
+        [WS_METHODS.botsExecutorInstall]: (input) =>
+          botExecutor.install(input.entry, input.name).pipe(Effect.map((app) => ({ app }))),
+        [WS_METHODS.botsExecutorConnections]: (_input) =>
+          botExecutor.apps.pipe(Effect.map((apps) => ({ apps }))),
+        [WS_METHODS.botsExecutorConnect]: (input) => botExecutor.connect(input),
+        [WS_METHODS.botsExecutorDisconnect]: (input) =>
+          botExecutor.disconnect(input).pipe(Effect.map((app) => ({ app }))),
         [WS_METHODS.guestShareCreate]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(guestShares.create(input)),

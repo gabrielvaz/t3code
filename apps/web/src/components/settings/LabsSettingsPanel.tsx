@@ -44,6 +44,7 @@ export function LabsSettingsPanel() {
         <LinkedEnvironmentsRow />
         <WorkflowsRow />
         <WorkflowSkippedRunsRow />
+        <BotsProjectsBoardRow />
         <PromptSuggestionsRow />
         <SimlockHostsRow />
         <FastWorktreeCheckoutRow />
@@ -228,6 +229,33 @@ function WorkflowsRow() {
           checked={settings.workflowsEnabled}
           onCheckedChange={(checked) => updateSettings({ workflowsEnabled: Boolean(checked) })}
           aria-label={gt("Workflows")}
+        />
+      }
+    />
+  );
+}
+
+function BotsProjectsBoardRow() {
+  const searchableSetting = useSearchableSetting();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const gt = useGT();
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("bots-projects-board")}
+      settingKeys={["botsProjectsBoardEnabled"]}
+      description={gt(
+        "A live board of projects, to-dos, machines and services that you and your Bots keep up to date together. Open it from the Bots section of the sidebar. While off, Bots don't see the board or its tools; what's on it is kept.",
+      )}
+      control={
+        <ScopedSwitch
+          settingKeys={["botsProjectsBoardEnabled"]}
+          checked={settings.botsProjectsBoardEnabled}
+          onCheckedChange={(checked) =>
+            updateSettings({ botsProjectsBoardEnabled: Boolean(checked) })
+          }
+          aria-label={gt("Projects board")}
         />
       }
     />

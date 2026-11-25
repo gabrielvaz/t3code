@@ -65,6 +65,7 @@ import {
   ArrowLeftIcon,
   BotIcon,
   BugIcon,
+  LayoutListIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -90,6 +91,7 @@ import {
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
 import { openNewBotDialog, useEnvironmentBots } from "../state/bots";
+import { useBoardEnvironmentIds } from "./bots/useBoardEnvironmentIds";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
 import { previewBridge } from "./preview/previewBridge";
 import {
@@ -451,6 +453,7 @@ function OpenCommandPaletteDialog(props: {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   const environmentBots = useEnvironmentBots();
+  const boardEnvironmentIds = useBoardEnvironmentIds();
   const { openChildSearch, setOpen } = props;
   // Keyed by palette session: the intent and restored search only seed this
   // mount, and closing must not change what the closing palette shows.
@@ -1676,6 +1679,18 @@ function OpenCommandPaletteDialog(props: {
         openNewBotDialog();
       },
     });
+    if (boardEnvironmentIds.length > 0) {
+      actionItems.push({
+        kind: "action",
+        value: "action:open-bots-board",
+        searchTerms: ["projects board", "board", "to-dos", "todo", "tasks", "machines", "bots"],
+        title: gt("Open Projects board"),
+        icon: <LayoutListIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          await navigate({ to: "/bots/board" });
+        },
+      });
+    }
     // Like settings, each Bot's page is a search result rather than a row in the open palette.
     for (const { bot } of deferredQuery.trim().length > 0 ? environmentBots.bots : []) {
       actionItems.push({

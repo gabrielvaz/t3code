@@ -31,6 +31,7 @@ function bot(id: string, overrides: Partial<Bot> = {}): Bot {
     updatedAt: "2026-01-01T00:00:00.000Z",
     memoryTidy: "off",
     memoryTidyTaskId: null,
+    executorApproval: "ask",
     ...overrides,
   };
 }

@@ -14,6 +14,7 @@ import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { McpSchema } from "effect/ai";
 
+import * as BotProjectsBoard from "../../../bots/BotProjectsBoard.ts";
 import * as BotService from "../../../bots/BotService.ts";
 import * as BotVault from "../../../bots/BotVault.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -42,6 +43,7 @@ const login: BotVault.StoredLogin = {
 const scopeFor = (
   threadId: ThreadId,
   botThread: boolean,
+  projectsBoard = false,
 ): McpInvocationContext.McpInvocationScope => ({
   environmentId: EnvironmentId.make("environment:bots"),
   requestNamespace: "session:bots",
@@ -53,11 +55,12 @@ const scopeFor = (
   client: undefined,
   capabilities: new Set(["orchestration", "preview"] as const),
   issuedAt: 0,
-  ...(botThread ? { botThread } : {}),
+  ...(botThread ? { botThread, projectsBoard } : {}),
 });
 
-const harness = (threadId: ThreadId, pageUrl: string) => {
+const harness = (threadId: ThreadId, pageUrl: string, boardEnabled = false) => {
   const typed: Array<unknown> = [];
+  const saved: Array<{ inputs: ReadonlyArray<unknown>; actor: unknown }> = [];
   const layer = McpToolAccess.HandlersLayer.layer(BotsHandlers.layer).pipe(
     Layer.provideMerge(
       Layer.mergeAll(
@@ -69,7 +72,20 @@ const harness = (threadId: ThreadId, pageUrl: string) => {
         ),
         Layer.mock(BotService.BotService)({
           botForThread: (id) =>
-            Effect.succeed(id === botThreadId ? ({ id: "bot-1" } as unknown as Bot) : null),
+            Effect.succeed(
+              id === botThreadId
+                ? ({ id: "bot-1", name: "Ops", slug: "ops" } as unknown as Bot)
+                : null,
+            ),
+        }),
+        Layer.mock(BotProjectsBoard.BotProjectsBoard)({
+          enabled: Effect.succeed(boardEnabled),
+          snapshot: Effect.succeed({ type: "snapshot", version: 1, items: [], activity: [] }),
+          save: (inputs, actor) =>
+            Effect.sync(() => {
+              saved.push({ inputs, actor });
+              return { version: 2, items: [] };
+            }),
         }),
         Layer.mock(BotVault.BotVault)({
           list: Effect.succeed({
@@ -97,7 +113,7 @@ const harness = (threadId: ThreadId, pageUrl: string) => {
       ),
     ),
   );
-  return { layer, typed };
+  return { layer, typed, saved };
 };
 
 const call = (name: string, input: Record<string, unknown>) =>
@@ -124,7 +140,9 @@ it.effect("the Vault tools are listed only in a Bot's own thread", () =>
     expect(yield* visible(undefined)).toBe(false);
     for (const tool of Object.values(BotsToolkit.tools)) {
       expect(Context.getOrUndefined(tool.annotations, McpSchema.EnabledWhen)).toBe(
-        McpInvocationContext.hiddenUnlessBotThread,
+        tool.name.startsWith("projects_")
+          ? McpInvocationContext.hiddenUnlessBotBoard
+          : McpInvocationContext.hiddenUnlessBotThread,
       );
     }
   }),
@@ -173,3 +191,46 @@ it.effect("never writes a website password to a file", () => {
     });
   }).pipe(Effect.provide(layer));
 });
+
+it.effect("the Projects board tools are listed only in a Bot's thread while the beta is on", () =>
+  Effect.gen(function* () {
+    const visible = (scope: McpInvocationContext.McpInvocationScope) =>
+      Effect.sync(() => McpInvocationContext.hiddenUnlessBotBoard()).pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+      );
+    expect(yield* visible(scopeFor(botThreadId, true, true))).toBe(true);
+    expect(yield* visible(scopeFor(botThreadId, true, false))).toBe(false);
+    expect(yield* visible(scopeFor(otherThreadId, false, true))).toBe(false);
+    expect(yield* visible({ ...scopeFor(botThreadId, true, true), thread: undefined })).toBe(false);
+    expect(
+      Object.keys(BotsToolkit.tools)
+        .filter((name) => name.startsWith("projects_"))
+        .sort(),
+    ).toEqual([
+      "projects_delete",
+      "projects_find",
+      "projects_get",
+      "projects_overview",
+      "projects_save",
+    ]);
+  }),
+);
+
+it.effect("refuses board calls while the beta is off, and saves as the Bot when on", () =>
+  Effect.gen(function* () {
+    const off = harness(botThreadId, "https://example.com", false);
+    expect(yield* call("projects_overview", {}).pipe(Effect.provide(off.layer))).toMatchObject({
+      code: "capability_denied",
+    });
+    const on = harness(botThreadId, "https://example.com", true);
+    const items = [{ kind: "task", title: "Ship it" }];
+    expect(yield* call("projects_save", { items }).pipe(Effect.provide(on.layer))).toEqual({
+      saved: [],
+    });
+    expect(on.saved).toEqual([{ inputs: items, actor: { type: "bot", name: "Ops", slug: "ops" } }]);
+    const other = harness(otherThreadId, "https://example.com", true);
+    expect(yield* call("projects_find", {}).pipe(Effect.provide(other.layer))).toMatchObject({
+      code: "capability_denied",
+    });
+  }),
+);

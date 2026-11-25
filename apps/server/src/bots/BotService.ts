@@ -27,11 +27,13 @@ import {
   ProjectId,
   type ScheduledTask,
   ScheduledTaskId,
+  type ServerSettings as ServerSettingsValue,
   type ThreadId,
 } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
@@ -54,6 +56,8 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { botAvatarFileName } from "./BotAvatarSvg.ts";
+import * as BotExecutor from "./BotExecutor.ts";
+import { type ExecutorMcpServer, writeBotMcpConfig } from "./BotMcpConfig.ts";
 import {
   type BotPaths,
   botPaths,
@@ -76,8 +80,10 @@ import {
   customInstructions,
   mergeManaged,
   renderManagedBlock,
+  type TemplateExecutor,
   withCustom,
 } from "./BotTemplate.ts";
+import * as NodeOS from "node:os";
 
 export type BotServiceError =
   | BotNotFoundError
@@ -189,7 +195,42 @@ function validateAvatar(avatar: BotAvatar): BotInvalidError | null {
   return null;
 }
 
-const make = Effect.gen(function* () {
+/** What every Bot's files depend on beyond the Bot itself: Labs switches and Executor. */
+interface RenderContext {
+  readonly projectsBoard: boolean;
+  readonly executor: BotExecutor.ExecutorConnection | null;
+}
+
+function executorServer(
+  connection: BotExecutor.ExecutorConnection | null,
+  bot: Bot,
+): ExecutorMcpServer | null {
+  if (connection === null) return null;
+  return {
+    url: BotExecutor.executorMcpUrl(connection.profile, bot.executorApproval),
+    headers: BotExecutor.executorMcpHeaders(connection.profile, connection.token),
+  };
+}
+
+function templateExecutor(
+  connection: BotExecutor.ExecutorConnection | null,
+): TemplateExecutor | null {
+  if (connection === null) return null;
+  const { profile } = connection;
+  return {
+    kind: profile.kind,
+    organization: profile.organization,
+    publicUrl: profile.publicUrl,
+    skippedApps: profile.skippedApps,
+  };
+}
+
+export interface BotServiceOptions {
+  /** Codex's own config.toml, where a Bot folder is trusted; null never touches it. */
+  readonly codexGlobalConfig: string | null;
+}
+
+const make = Effect.fn("BotService.make")(function* (options: BotServiceOptions) {
   const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -198,6 +239,7 @@ const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService.ThreadManagementService;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
+  const executor = yield* BotExecutor.BotExecutor;
   const random = yield* SecureRandom.SecureRandom;
   // MCP asks on every request whether the caller is a Bot thread, so this stays in memory.
   const botsByThread = yield* Ref.make<ReadonlyMap<ThreadId, Bot>>(new Map());
@@ -328,13 +370,30 @@ const make = Effect.gen(function* () {
     return `.bot/${fileName}`;
   });
 
+  const renderContext = Effect.gen(function* () {
+    const projectsBoard = yield* serverSettings.getSettings.pipe(
+      Effect.map((current) => current.botsProjectsBoardEnabled),
+      Effect.orElseSucceed(() => false),
+    );
+    return { projectsBoard, executor: yield* executor.connection } satisfies RenderContext;
+  });
+
+  const writeMcpConfig = (bot: Bot, connection: BotExecutor.ExecutorConnection | null) =>
+    io(
+      writeBotMcpConfig(
+        { dir: pathsOf(bot).dir, codexGlobalConfig: options.codexGlobalConfig },
+        executorServer(connection, bot),
+      ),
+    ).pipe(Effect.mapError(storage("write", bot.id)));
+
   /** Rewrites the managed block of the Bot's AGENTS.md, keeping the user's instructions. */
   const renderBot = Effect.fn("BotService.renderBot")(function* (
     bot: Bot,
     settings: BotsSharedSettings,
-    options?: { readonly instructions?: string },
+    renderOptions?: { readonly instructions?: string; readonly context?: RenderContext },
   ) {
     const paths = pathsOf(bot);
+    const context = renderOptions?.context ?? (yield* renderContext);
     const [botMemory, sharedMemory, existing] = yield* Effect.all([
       read(paths.memory, bot.id),
       read(shared.memory),
@@ -352,21 +411,30 @@ const make = Effect.gen(function* () {
           sharedFile: SHARED_MEMORY_LABEL,
         }),
       ),
+      projectsBoard: context.projectsBoard,
+      executor: templateExecutor(context.executor),
     });
     const next =
-      options?.instructions !== undefined
-        ? withCustom(block, options.instructions)
+      renderOptions?.instructions !== undefined
+        ? withCustom(block, renderOptions.instructions)
         : existing === ""
           ? withCustom(block, "")
           : mergeManaged(existing, block);
     yield* writeIfChanged(paths.agents, next, bot.id);
     yield* writeIfChanged(paths.claude, BOT_CLAUDE_MD, bot.id);
+    yield* writeMcpConfig(bot, context.executor);
     return yield* writeAvatar(bot, paths);
   });
 
   const renderAll = Effect.fn("BotService.renderAll")(function* () {
-    const [bots, settings] = yield* Effect.all([readBots(), readSettings()]);
-    yield* Effect.forEach(bots, (bot) => renderBot(bot, settings), { discard: true });
+    const [bots, settings, context] = yield* Effect.all([
+      readBots(),
+      readSettings(),
+      renderContext,
+    ]);
+    yield* Effect.forEach(bots, (bot) => renderBot(bot, settings, { context }), {
+      discard: true,
+    });
   });
 
   const syncProject = Effect.fn("BotService.syncProject")(function* (
@@ -551,6 +619,7 @@ const make = Effect.gen(function* () {
         updatedAt: now,
         memoryTidy: "off",
         memoryTidyTaskId: null,
+        executorApproval: "ask",
       };
       const paths = pathsOf(draft);
       yield* Ref.set(created, { dir: paths.dir });
@@ -636,6 +705,7 @@ const make = Effect.gen(function* () {
       ...(input.order === undefined ? {} : { order: input.order }),
       ...(input.primary === undefined ? {} : { primary: input.primary }),
       ...(input.memoryTidy === undefined ? {} : { memoryTidy: input.memoryTidy }),
+      ...(input.executorApproval === undefined ? {} : { executorApproval: input.executorApproval }),
       updatedAt: yield* nowIso,
     };
     if (input.memoryTidy !== undefined && input.memoryTidy !== current.memoryTidy) {
@@ -677,6 +747,8 @@ const make = Effect.gen(function* () {
           Effect.mapError(storage("delete-project", bot.id)),
         );
     }
+    // Takes back Codex's trust of the folder along with the Executor entries.
+    yield* writeMcpConfig(bot, null).pipe(Effect.ignoreCause({ log: true }));
     const nowMs = yield* Clock.currentTimeMillis;
     yield* io(trashFolder(root, bot.slug, nowMs)).pipe(Effect.mapError(storage("trash", bot.id)));
     yield* Ref.update(
@@ -789,7 +861,8 @@ const make = Effect.gen(function* () {
       (event) =>
         event.path.endsWith("MEMORY.md") ||
         event.path.endsWith("shared-memory.md") ||
-        event.path.endsWith("settings.json"),
+        // Paths arrive relative to the root; a Bot's own .claude/settings.json must not match.
+        event.path.endsWith(path.join(".shared", "settings.json")),
     ),
     Stream.debounce(WATCH_SETTLE),
     Stream.runForEach(() => rerenderAll),
@@ -799,6 +872,24 @@ const make = Effect.gen(function* () {
         Cause.pretty(cause),
       ).pipe(Effect.andThen(rerenderAll.pipe(Effect.delay(POLL_INTERVAL), Effect.forever))),
     ),
+    Effect.forkScoped,
+  );
+
+  // The Projects board switch and Executor's settings change what every Bot's files say.
+  const renderKey = (current: ServerSettingsValue) =>
+    JSON.stringify([current.botsProjectsBoardEnabled, current.botsExecutor]);
+  const lastRenderKey = yield* Ref.make(
+    yield* serverSettings.getSettings.pipe(
+      Effect.map(renderKey),
+      Effect.orElseSucceed(() => ""),
+    ),
+  );
+  yield* serverSettings.streamChanges.pipe(
+    Stream.map(renderKey),
+    Stream.filterEffect((key) =>
+      Ref.getAndSet(lastRenderKey, key).pipe(Effect.map((last) => last !== key)),
+    ),
+    Stream.runForEach(() => rerenderAll),
     Effect.forkScoped,
   );
 
@@ -819,4 +910,14 @@ const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(BotService, make);
+export const layerWith = (options: BotServiceOptions) => Layer.effect(BotService, make(options));
+
+export const layer = Layer.unwrap(
+  Effect.gen(function* () {
+    const path = yield* Path.Path;
+    const codexHome =
+      (yield* Config.String("CODEX_HOME").pipe(Config.withDefault(""))) ||
+      path.join(NodeOS.homedir(), ".codex");
+    return layerWith({ codexGlobalConfig: path.join(codexHome, "config.toml") });
+  }),
+);

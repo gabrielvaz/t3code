@@ -300,11 +300,13 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       linkedEnvironments: settings.linkedEnvironmentsEnabled,
       agentFeedback: settings.agentFeedback.mode,
       workflows: settings.workflowsEnabled,
+      projectsBoard: settings.botsProjectsBoardEnabled,
     })),
     Effect.orElseSucceed(() => ({
       linkedEnvironments: false,
       agentFeedback: "off" as const,
       workflows: false,
+      projectsBoard: false,
     })),
   );
   const pullRequests = yield* Effect.serviceOption(PullRequestService.PullRequestService);
@@ -380,7 +382,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const asked = withModeLimit(withSenderThread(invocation, request), request);
     if (asked === undefined) return invalidModeLimit;
     const limited = McpInvocationContext.withRuntimeModeCeiling(asked, runtimeModeCeiling);
-    const { linkedEnvironments, agentFeedback, workflows } = yield* settingsFlags;
+    const { linkedEnvironments, agentFeedback, workflows, projectsBoard } = yield* settingsFlags;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     const origin = Option.getOrUndefined(Option.map(requestUrl(request), (url) => url.origin));
     const forge =
@@ -398,7 +400,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       workflows,
       origin,
       ...(forge === undefined ? {} : { forge }),
-      ...(botThread ? { botThread } : {}),
+      ...(botThread ? { botThread, projectsBoard } : {}),
     };
   });
   // Untraced: a span here would wrap the tool call; the HTTP server span already covers it.

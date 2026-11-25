@@ -187,6 +187,22 @@ export function BotDetailsTab({ entry }: { entry: EnvironmentBot }) {
           }
         />
         <SettingsRow
+          title={gt("Approve connected-app actions")}
+          description={gt(
+            "When on, Executor runs this Bot's actions in your connected apps without asking it to confirm first.",
+          )}
+          control={
+            <Switch
+              checked={bot.executorApproval === "automatic"}
+              disabled={!canOperate}
+              onCheckedChange={(checked) =>
+                void update(entry, { executorApproval: checked ? "automatic" : "ask" })
+              }
+              aria-label={gt("Approve connected-app actions")}
+            />
+          }
+        />
+        <SettingsRow
           title={gt("Chat")}
           description={gt("The Bot's long-lived thread.")}
           control={

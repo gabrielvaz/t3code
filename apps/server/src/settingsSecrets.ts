@@ -1,5 +1,6 @@
 import {
   AntigravitySettings,
+  BotsExecutorSettings,
   ClaudeSettings,
   CloudSpeechCredentials,
   CodexSettings,
@@ -52,6 +53,7 @@ const providerSecretFields = new Map([
 const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
 const textGeneratorSecretFields = secretSettingsFields(TextGeneratorConfig);
 const voiceSecretFields = secretSettingsFields(CloudSpeechCredentials);
+const botsExecutorSecretFields = secretSettingsFields(BotsExecutorSettings);
 const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const simlockDeviceHostSecretFields = secretSettingsFields(SimlockDeviceHostConfig);
 const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
@@ -257,6 +259,12 @@ function mapSecretFieldGroups(
       voiceSecretFields,
       (provider) => `voice-cloud-${provider}`,
     ) as ServerSettings["cloudSpeechCredentials"],
+    botsExecutor: mapFields(
+      settings.botsExecutor,
+      botsExecutorSecretFields,
+      (field, serverHost) =>
+        `bots-executor-${encode(field)}` + (serverHost === null ? "" : `-${encode(serverHost)}`),
+    ) as ServerSettings["botsExecutor"],
     providerInstances,
     sourceControlHosts,
     usageLimitSources,
@@ -375,5 +383,7 @@ export function withoutRedirectedSecrets(
     simlockDeviceHosts: next.simlockDeviceHosts.map((host) =>
       rebound(host, simlockHosts.get(host.id), "agentToken", "gatewayUrl"),
     ),
+    // The token goes to the MCP server too, but that address follows the API's unless overridden.
+    botsExecutor: rebound(next.botsExecutor, current.botsExecutor, "token", "url"),
   };
 }

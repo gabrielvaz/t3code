@@ -54,6 +54,7 @@ import { Route as ChatSettingsAppearanceRouteImport } from './routes/_chat.setti
 import { Route as ChatSettingsAccessRouteImport } from './routes/_chat.settings.access'
 import { Route as ChatSettingsAboutRouteImport } from './routes/_chat.settings.about'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
+import { Route as ChatBotsBoardRouteImport } from './routes/_chat.bots.board'
 import { Route as ChatBotsBotIdRouteImport } from './routes/_chat.bots.$botId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRouteImport } from './routes/_chat.linked.$viaEnvironmentId.$linkedEnvironmentId.$linkedThreadId'
@@ -287,6 +288,11 @@ const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   path: '/draft/$draftId',
   getParentRoute: () => ChatRoute,
 } as any)
+const ChatBotsBoardRoute = ChatBotsBoardRouteImport.update({
+  id: '/bots/board',
+  path: '/bots/board',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatBotsBotIdRoute = ChatBotsBotIdRouteImport.update({
   id: '/bots/$botId',
   path: '/bots/$botId',
@@ -324,6 +330,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/bots/$botId': typeof ChatBotsBotIdRoute
+  '/bots/board': typeof ChatBotsBoardRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/settings/about': typeof ChatSettingsAboutRoute
   '/settings/access': typeof ChatSettingsAccessRoute
@@ -373,6 +380,7 @@ export interface FileRoutesByTo {
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/bots/$botId': typeof ChatBotsBotIdRoute
+  '/bots/board': typeof ChatBotsBoardRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/settings/about': typeof ChatSettingsAboutRoute
   '/settings/access': typeof ChatSettingsAccessRoute
@@ -424,6 +432,7 @@ export interface FileRoutesById {
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/bots/$botId': typeof ChatBotsBotIdRoute
+  '/_chat/bots/board': typeof ChatBotsBoardRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/_chat/settings/about': typeof ChatSettingsAboutRoute
   '/_chat/settings/access': typeof ChatSettingsAccessRoute
@@ -475,6 +484,7 @@ export interface FileRouteTypes {
     | '/projects/$projectKey'
     | '/$environmentId/$threadId'
     | '/bots/$botId'
+    | '/bots/board'
     | '/draft/$draftId'
     | '/settings/about'
     | '/settings/access'
@@ -524,6 +534,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$environmentId/$threadId'
     | '/bots/$botId'
+    | '/bots/board'
     | '/draft/$draftId'
     | '/settings/about'
     | '/settings/access'
@@ -574,6 +585,7 @@ export interface FileRouteTypes {
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/bots/$botId'
+    | '/_chat/bots/board'
     | '/_chat/draft/$draftId'
     | '/_chat/settings/about'
     | '/_chat/settings/access'
@@ -936,6 +948,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatDraftDraftIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/bots/board': {
+      id: '/_chat/bots/board'
+      path: '/bots/board'
+      fullPath: '/bots/board'
+      preLoaderRoute: typeof ChatBotsBoardRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/bots/$botId': {
       id: '/_chat/bots/$botId'
       path: '/bots/$botId'
@@ -1036,6 +1055,7 @@ interface ChatRouteChildren {
   ChatIndexRoute: typeof ChatIndexRoute
   ChatEnvironmentIdThreadIdRoute: typeof ChatEnvironmentIdThreadIdRoute
   ChatBotsBotIdRoute: typeof ChatBotsBotIdRoute
+  ChatBotsBoardRoute: typeof ChatBotsBoardRoute
   ChatDraftDraftIdRoute: typeof ChatDraftDraftIdRoute
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute: typeof ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute
 }
@@ -1050,6 +1070,7 @@ const ChatRouteChildren: ChatRouteChildren = {
   ChatIndexRoute: ChatIndexRoute,
   ChatEnvironmentIdThreadIdRoute: ChatEnvironmentIdThreadIdRoute,
   ChatBotsBotIdRoute: ChatBotsBotIdRoute,
+  ChatBotsBoardRoute: ChatBotsBoardRoute,
   ChatDraftDraftIdRoute: ChatDraftDraftIdRoute,
   ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute:
     ChatLinkedViaEnvironmentIdLinkedEnvironmentIdLinkedThreadIdRoute,

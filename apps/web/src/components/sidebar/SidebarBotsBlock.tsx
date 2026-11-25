@@ -4,7 +4,7 @@ import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import type { ContextMenuSource, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useGT } from "gt-react";
-import { PinIcon, PlusIcon } from "lucide-react";
+import { LayoutListIcon, PinIcon, PlusIcon } from "lucide-react";
 import { memo, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
 
 import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
@@ -15,6 +15,7 @@ import { useThreadShell } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useUiStateStore } from "../../uiStateStore";
 import { BotAvatar } from "../bots/BotAvatar";
+import { useBoardEnvironmentIds } from "../bots/useBoardEnvironmentIds";
 import { useBotActions } from "../bots/useBotActions";
 import {
   hasUnseenCompletion,
@@ -132,6 +133,7 @@ export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
   const canCreate = useAtomValue(
     serverEnvironment.createBot.permissionAtom(props.bots[0]?.environmentId ?? null),
   );
+  const boardOn = useBoardEnvironmentIds().length > 0;
   if (props.bots.length === 0) return null;
 
   const showContextMenu = (
@@ -182,6 +184,21 @@ export const SidebarBotsBlock = memo(function SidebarBotsBlock(props: {
       <li className="flex h-8 list-none items-center gap-2 ps-2 pe-1 text-xs font-medium text-sidebar-muted-foreground">
         <span className="min-w-0 truncate">{gt("Bots", { $context: "sidebar section" })}</span>
         <span aria-hidden className="h-px min-w-2 flex-1 bg-sidebar-border/50" />
+        {boardOn ? (
+          <SharedTooltipTrigger
+            render={
+              <Button
+                size="icon-micro"
+                variant="ghost-muted"
+                aria-label={gt("Projects board")}
+                onClick={() => void navigate({ to: "/bots/board" })}
+              />
+            }
+            label={gt("Projects board")}
+          >
+            <LayoutListIcon />
+          </SharedTooltipTrigger>
+        ) : null}
         <SharedTooltipTrigger
           render={
             <Button
