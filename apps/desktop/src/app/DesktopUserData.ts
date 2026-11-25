@@ -1,3 +1,4 @@
+import { FORK_IDENTITY } from "@t3tools/shared/forkIdentity";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -41,7 +42,8 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const path = yield* Path.Path;
     const names = input.isDevelopment
       ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
-      : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
+      : // The fork never adopts the official app's profiles; its own has no legacy name.
+        { current: FORK_IDENTITY.userDataDirName, legacy: FORK_IDENTITY.userDataDirName };
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>

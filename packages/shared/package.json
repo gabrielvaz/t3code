@@ -35,6 +35,10 @@
       "types": "./src/composerPullRequestMatches.ts",
       "import": "./src/composerPullRequestMatches.ts"
     },
+    "./forkIdentity": {
+      "types": "./src/forkIdentity.ts",
+      "import": "./src/forkIdentity.ts"
+    },
     "./botMentions": {
       "types": "./src/botMentions.ts",
       "import": "./src/botMentions.ts"

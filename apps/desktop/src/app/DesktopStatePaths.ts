@@ -1,3 +1,4 @@
+import { FORK_IDENTITY } from "@t3tools/shared/forkIdentity";
 import * as Option from "effect/Option";
 
 export type JoinPath = (first: string, ...segments: string[]) => string;
@@ -12,11 +13,13 @@ function normalizeConfiguredBaseDir(t3Home: Option.Option<string>): Option.Optio
 
 export function resolveDesktopBaseDir(input: {
   readonly homeDirectory: string;
+  readonly isDevelopment: boolean;
   readonly joinPath: JoinPath;
   readonly t3Home: Option.Option<string>;
 }): string {
+  // Packaged fork builds keep their own home; development shares upstream's `~/.t3/dev`.
   return Option.getOrElse(normalizeConfiguredBaseDir(input.t3Home), () =>
-    input.joinPath(input.homeDirectory, ".t3"),
+    input.joinPath(input.homeDirectory, input.isDevelopment ? ".t3" : FORK_IDENTITY.t3HomeDirName),
   );
 }
 

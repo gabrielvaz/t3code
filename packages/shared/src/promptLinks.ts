@@ -1,3 +1,4 @@
+import { FORK_IDENTITY } from "./forkIdentity.ts";
 import { DEFAULT_HOSTED_APP_URL } from "./connectAuth.ts";
 import { parseUrl } from "./url.ts";
 
@@ -206,7 +207,7 @@ export function buildNewThreadLink(input: {
   return url.toString();
 }
 
-const APP_SCHEME = /^t3code(?:-[a-z]+)?:$/;
+const APP_SCHEME = new RegExp(`^(?:t3code(?:-[a-z]+)?|${FORK_IDENTITY.urlScheme}):$`);
 const THREAD_PATH = /^\/([^/]+)\/([^/]+)\/?$/;
 
 export function promptLinkAppPath(
